@@ -1,0 +1,5 @@
+{
+  "email": "<your_mega_email>",
+  "password": "<your_mega_password>",
+  "use_session_file": "<true_or_false>"
+}

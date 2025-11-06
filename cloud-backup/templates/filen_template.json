@@ -1,0 +1,4 @@
+{
+  "api_token": "<your_filen_api_token>",
+  "folder_id": "<optional_folder_id_to_upload_to>"
+}
