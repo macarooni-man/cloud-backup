@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 CONFIG_FILE = os.path.join(server.directory, 'cloud_backup_config.json')
 
 # GitHub raw URL for templates
-GITHUB_TEMPLATES_BASE = "https://raw.githubusercontent.com/kalashnikxvxiii-collab/amscripts/main/cloud-backup/templates"
+GITHUB_TEMPLATES_BASE = "https://raw.githubusercontent.com/kalashnikxvxiii-collab/amscripts/refs/heads/main/cloud-backup/templates"
 
 # Supported providers
 SUPPORTED_PROVIDERS = ['gdrive', 'mega', 'filen']
