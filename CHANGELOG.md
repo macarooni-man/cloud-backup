@@ -20,7 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2-pre] - 2025-11-07
+## [0.2-pre] - 2025-01-07
+
+### ✅ Verified Working
+- **Script successfully compiles** in auto-mcs amscript engine v1.5.1 ✅
+- **Setup flow tested** and confirmed functional ✅
+- **First run initialization** displays correctly ✅
+- **Decorator syntax** corrected for amscript (uses `:` directly after decorator, no `def` needed) ✅
 
 ### Added
 - **Interactive setup flow** with step-by-step guidance

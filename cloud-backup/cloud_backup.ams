@@ -303,8 +303,7 @@ def upload_backup():
 # ---------------------------------------------------------
 # Command Handler
 # ---------------------------------------------------------
-@player.on_alias(player, command='cloudbackup', arguments={'action': False, 'arg1': False, 'arg2': False, 'arg3': False, 'arg4': False, 'arg5': False}, permission='op', description='Manage cloud backups')
-def cloudbackup_command(player, command='cloudbackup', arguments=None):
+@player.on_alias(player, command='cloudbackup', arguments={'action': False, 'arg1': False, 'arg2': False, 'arg3': False, 'arg4': False, 'arg5': False}, permission='op', description='Manage cloud backups'):
     """
     Handle cloudbackup commands
     Usage: !cloudbackup <action> [args...]
@@ -407,8 +406,7 @@ def cloudbackup_command(player, command='cloudbackup', arguments=None):
 # Startup behavior
 # ---------------------------------------------------------
 
-@server.on_start(data)
-def on_server_start(data):
+@server.on_start(data):
     """
     On server start: check if cloud backup is configured and show status.
     """
