@@ -1,12 +1,9 @@
 {
-  "type": "<service_account_or_oauth>",
-  "project_id": "<GCP_PROJECT_ID>",
-  "private_key_id": "<PRIVATE_KEY_ID>",
-  "private_key": "<PRIVATE_KEY>",
-  "client_email": "<SERVICE_ACCOUNT_EMAIL>",
-  "client_id": "<CLIENT_ID>",
-  "auth_uri": "<AUTH_URI>",
-  "token_uri": "<TOKEN_URI>",
-  "auth_provider_x509_cert_url": "<PROVIDER_CERT_URL>",
-  "client_x509_cert_url": "<CLIENT_CERT_URL>"
+  "fields": ["credentials_file"],
+  "field_info": {
+    "credentials_file": {
+      "description": "Full path to your Google Service Account JSON file",
+      "example": "C:\\path\\to\\service-account-key.json (Windows) or /path/to/service-account-key.json (Linux/Mac)"
+    }
+  }
 }

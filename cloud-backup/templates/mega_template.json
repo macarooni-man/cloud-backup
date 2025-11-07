@@ -1,5 +1,13 @@
 {
-  "email": "<your_mega_email>",
-  "password": "<your_mega_password>",
-  "use_session_file": "<true_or_false>"
+  "fields": ["email", "password"],
+  "field_info": {
+    "email": {
+      "description": "Your Mega account email address",
+      "example": "user@example.com"
+    },
+    "password": {
+      "description": "Your Mega account password",
+      "example": "your_secure_password"
+    }
+  }
 }

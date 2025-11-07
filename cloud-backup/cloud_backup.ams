@@ -1,286 +1,152 @@
+server.log("DEBUG: cloud-backup.ams import starting")
+ 
 #!
-# title: Cloud Backup Manager
-# author: Kala
-# version: 0.9-pre
-# description: Upload server backups to cloud storage providers (Google Drive, Mega, Filen). Interactive first-run setup included.
+# title: Cloud Backup
+# author: kalashnikxvxiii
+# version: 0.2-pre
+# description: Upload server backups to selected cloud provider (Google Drive, Mega, Filen)
 #!
 
-import os
 import json
-import traceback
-from datetime import datetime, timedelta
+import os
+import time
+import urllib.request
+from threading import Thread
 
-# ===========================
-# CONFIGURATION
-# ===========================
+SUPPORTED_PROVIDERS = ["gdrive", "mega", "filen"]
 
-# config file path in server directory
-CONFIG_FILE = os.path.join(server.directory, 'cloud_backup_config.json')
+# CONFIG_PATH will be set after server object is available in functions
+# Using server.directory to store config in the server folder
+CONFIG_PATH = None
 
-# GitHub raw URL for templates
-GITHUB_TEMPLATES_BASE = "https://raw.githubusercontent.com/kalashnikxvxiii-collab/amscripts/refs/heads/main/cloud-backup/templates"
+# IMPORTANT: correct raw GitHub URL
+GITHUB_TEMPLATES_BASE = "https://raw.githubusercontent.com/kalashnikxvxiii-collab/amscripts/main/cloud-backup/templates"
 
-# Supported providers
-SUPPORTED_PROVIDERS = ['gdrive', 'mega', 'filen']
 
-DEFAULT_CONFIG = {
-    "enabled": False,
-    "provider": None,                       # 'gdrive' | 'mega' | 'filen'
-    "credentials_file": None,               # path to credentials or token JSON
-    "upload_frequency": "every_backup",     # 'every_backup', 'hourly', 'daily', 'weekly'
-    "max_cloud_backups": 10,
-    "last_upload": None
-}
+# ---------------------------------------------------------
+# Basic config file load/save
+# ---------------------------------------------------------
+def get_config_path():
+    """Get the config file path in the server directory."""
+    return os.path.join(server.directory, "cloud_backup_config.json")
 
-# ===========================
-# UTILITIES
-# ===========================
 
 def load_config():
-    """Load configuration from JSON. Merge missing keys from DEFAULT_CONFIG."""
+    config_path = get_config_path()
+    if not os.path.exists(config_path):
+        return {"provider": None, "settings": {}}
     try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r') as f:
-                config = json.load(f)
-        else:
-            config = DEFAULT_CONFIG.copy()
-        # Merge defaults for new keys
-        for k, v in DEFAULT_CONFIG.items():
-            if k not in config:
-                config[k] = v
-        return config
+        with open(config_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        server.log_error("Failed to read config, resetting.")
+        return {"provider": None, "settings": {}}
+
+
+def save_config(cfg):
+    config_path = get_config_path()
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=4)
     except Exception as e:
-        server.log_error("Failed to load config: " + str(e))
-        return DEFAULT_CONFIG.copy()
+        server.log_error("Failed to save configuration: " + str(e))
 
-def save_config(config):
-    """Save configuration to disk."""
+
+# ---------------------------------------------------------
+# Dependency check for Google Drive
+# (libraries installed into .auto-mcs/Tools/amscript/libs)
+# ---------------------------------------------------------
+def check_google_deps():
     try:
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(config, f, indent=4)
+        import google.oauth2  # type: ignore
+        import googleapiclient  # type: ignore
         return True
-    except Exception as e:
-        server.log_error("Failed to save config: " + str(e))
-        server.log_error(traceback.format_exc())
+    except:
         return False
 
-def should_upload(config):
-    """Determine whether it's time to upload according to frequency."""
-    if not config.get("enabled", False):
-        return False
-    freq = config.get("upload_frequency", "every_backup")
-    last = config.get("last_upload")
-    if freq == "every_backup":
-        return True
-    if not last:
-        return True
-    try:
-        last_dt = datetime.fromisoformat(last)
-        now = datetime.now()
-        if freq == "hourly":
-            return (now - last_dt) >= timedelta(hours=1)
-        if freq == "daily":
-            return (now - last_dt) >= timedelta(days=1)
-        if freq == "weekly":
-            return (now - last_dt) >= timedelta(weeks=1)
-    except Exception:
-        return True
-    return False
 
-# ===========================
-# TEMPLATE FETCHING
-# ===========================
+# ---------------------------------------------------------
+# Provider instructions (shown ONLY after provider chosen)
+# ---------------------------------------------------------
+def show_provider_instructions(provider):
+    provider = provider.lower()
+    server.log_warning("=" * 60)
+    server.log_success(f"{provider.upper()} SETUP INSTRUCTIONS")
+    server.log_warning("=" * 60)
 
-def fetch_provider_template(provider):
-    """
-    Download provider template from GitHub raw link.
-    Returns local path to saved template, or None on error.
-    Template filename pattern: <provider>_template.json
-    """
-    if provider not in SUPPORTED_PROVIDERS:
-        server.log_error(f"Template fetch: Unsupported provider {provider}")
-        return None
-
-    template_filename = f"{provider}_template.json"
-    url = f"{GITHUB_TEMPLATES_BASE}/{template_filename}"
-
-    try:
-        # Try to download using urllib; this assumes server has internet access.
-        try:
-            import urllib.request as _ur
-            server.log(f"Downloading template for {provider} from repository...")
-            resp = _ur.urlopen(url, timeout=15)
-            content = resp.read().decode('utf-8')
-        except Exception as e:
-            server.log_error("Failed to download template from GitHub: " + str(e))
-            return None
-
-        # Save template next to config with provider-specific filename
-        templates_dir = os.path.join(server.directory, "cloud_templates")
-        if not os.path.exists(templates_dir):
-            os.makedirs(templates_dir)
-        local_path = os.path.join(templates_dir, template_filename)
-        with open(local_path, 'w') as f:
-            f.write(content)
-
-        server.log_success(f"Template saved: {local_path}")
-        return local_path
-
-    except Exception as e:
-        server.log_error("Error in fetch_provider_template: " + str(e))
-        server.log_error(traceback.format_exc())
-        return None
-
-# ========================================
-# PROVIDER UPLOAD STUBS / IMPLEMENTATIONS
-# ========================================
-
-def upload_to_gdrive(backup_path, credentials_file):
-    """Upload backup to Google Drive using a service account key file (or other credentials file).
-       This function is adapted from your prototype; ensure required packages are installed on the host.
-    """
-    try:
-        from google.oauth2 import service_account
-        from googleapiclient.discovery import build
-        from googleapiclient.http import MediaFileUpload
-
-        SCOPES = ['https://www.googleapis.com/auth/drive.file']
-
-        # Allow both service account JSON and OAuth client JSON patterns:
-        credentials = service_account.Credentials.from_service_account_file(credentials_file, scopes=SCOPES)
-        service = build('drive', 'v3', credentials=credentials)
-
-        folder_name = f"minecraft-backups-{server.name}"
-        query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed = false"
-        results = service.files().list(q=query, fields='files(id)').execute()
-        files = results.get('files', [])
-
-        if files:
-            folder_id = files[0]['id']
-        else:
-            folder_metadata = {'name': folder_name, 'mimeType': 'application/vnd.google-apps.folder'}
-            folder = service.files().create(body=folder_metadata, fields='id').execute()
-            folder_id = folder['id']
-
-        file_name = os.path.basename(backup_path)
-        file_metadata = {'name': file_name, 'parents': [folder_id]}
-        media = MediaFileUpload(backup_path, resumable=True)
-        file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-
-        server.log_success(f"Backup uploaded to Google Drive: {file_name}")
-        return True
-    except Exception as e:
-        server.log_error("Google Drive upload error: " + str(e))
-        server.log_error(traceback.format_exc())
-        return False
-
-def upload_to_mega(backup_path, credentials_file):
-    """
-    Placeholder for Mega upload. You should implement this using a Mega library (for example, 'mega.py' package)
-    or via Mega API if you prefer. Typical credential: login email + password or API token if available.
-
-    Example TODO steps:
-      - pip install mega.py
-      - from mega import Mega
-      - m = Mega(); m.login(email, password)
-      - m.upload(backup_path, remote_path)
-    """
-    server.log_warning("Mega upload is not implemented yet. Please implement upload_to_mega() in the script.")
-    return False
-
-def upload_to_filen(backup_path, credentials_file):
-    """
-    Placeholder for Filen upload. Filen API details should be placed here. Typical credential: API token.
-    Implement this after reading Filen API docs or when you have a token-based method.
-
-    Example TODO steps:
-      - Use requests to POST multipart/form-data to Filen upload endpoint with token in headers
-    """
-    server.log_warning("Filen upload is not implemented yet. Please implement upload_to_filen() in the script.")
-    return False
-
-# ===========================
-# UPLOAD ORCHESTRATION
-# ===========================
-
-def upload_backup(config):
-    """Main upload orchestration function."""
-    if not should_upload(config):
-        return False
-
-    latest = backup.latest
-    if not latest:
-        server.log_warning("No backup available to upload.")
-        return False
-
-    backup_path = latest.path
-    provider = config.get("provider")
-    credentials_file = config.get("credentials_file")
-
-    if not provider or provider not in SUPPORTED_PROVIDERS:
-        server.log_error("Provider is not configured or unsupported.")
-        return False
-
-    if not credentials_file:
-        server.log_error("Credentials file not configured.")
-        return False
-
-    if not os.path.exists(credentials_file):
-        server.log_error(f"Credentials file not found: {credentials_file}")
-        return False
-
-    server.log(f"Uploading backup to {provider.upper()}...")
-
-    success = False
     if provider == "gdrive":
-        success = upload_to_gdrive(backup_path, credentials_file)
+        server.log("You selected Google Drive.")
+        server.log("1) Go to Google Cloud Console")
+        server.log("2) Create a Service Account and enable Drive API")
+        server.log("3) Download the JSON credentials")
+        server.log("4) Upload the JSON file to the server")
+        server.log("During setup, fields will be requested.")
+
+        if not check_google_deps():
+            server.log_warning("Google Drive libraries not detected.")
+            server.log("Install them based on your OS:")
+            server.log("Windows:")
+            server.log('pip install --target "%appdata%\\.auto-mcs\\Tools\\amscript\\libs" google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib')
+            server.log("Linux:")
+            server.log("pip install --target ~/.auto-mcs/Tools/amscript/libs google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib")
+            server.log("macOS:")
+            server.log('pip install --target "~/Library/Application Support/auto-mcs/Tools/amscript/libs" google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib')
+
     elif provider == "mega":
-        success = upload_to_mega(backup_path, credentials_file)
+        server.log("You selected Mega.")
+        server.log("You will need email/password or a session token.")
+        server.log("If required, install:")
+        server.log("  pip install --target <libs> mega.py")
+
     elif provider == "filen":
-        success = upload_to_filen(backup_path, credentials_file)
-    else:
-        server.log_error("Unsupported provider: " + str(provider))
-        return False
+        server.log("You selected Filen.")
+        server.log("You will need an API token and optionally a folder ID.")
+        server.log("If required, install:")
+        server.log("  pip install --target <libs> <filen-client>")
 
-    if success:
-        config["last_upload"] = datetime.now().isoformat()
-        save_config(config)
-    return success
+    server.log_warning("=" * 60)
 
-# ===========================
-# SETUP / INTERACTIVE FLOW
-# ===========================
 
-def show_initial_instructions():
-    server.log_warning("=" * 70)
-    server.log_warning("CLOUD BACKUP MANAGER - INITIAL SETUP REQUIRED")
-    server.log_warning("=" * 70)
-    server.log("This script uploads server backups to your chosen cloud provider (Google Drive, Mega, Filen).")
-    server.log("To configure, run the command: !cloudbackup setup  (run from server console or as OP in-game).")
-    server.log("The setup will download a provider template from the project's GitHub repository and guide you step-by-step.")
-    server.log("")
-    server.log("Supported providers: gdrive, mega, filen")
-    server.log("If you need help at any point, run: !cloudbackup help")
-    server.log_warning("=" * 70)
+# ---------------------------------------------------------
+# Template Fetch
+# ---------------------------------------------------------
+def fetch_provider_template(provider):
+    provider = provider.lower()
+    url = f"{GITHUB_TEMPLATES_BASE}/{provider}_template.json"
+    # Save templates in server directory
+    local_path = os.path.join(server.directory, f"{provider}_template.json")
 
-# Interactive setup state machine helpers
+    try:
+        server.log(f"Downloading template for {provider}...")
+        urllib.request.urlretrieve(url, local_path)
+        server.log_success("Template downloaded successfully.")
+        return local_path
+    except Exception as e:
+        server.log_error(f"Failed to download template: {e}")
+        return None
+
+
+# ---------------------------------------------------------
+# Setup flow
+# ---------------------------------------------------------
 def start_setup():
-    """Initialize setup state and ask for provider choice."""
     server.persistent['cloud_setup_state'] = {
-        'stage': 'choose_provider',
-        'provider': None,
-        'template_path': None,
-        'fields': None,
-        'current_field_index': 0,
-        'values': {}
+        "stage": "choose_provider",
+        "provider": None,
+        "template_file": None,
+        "fields": []
     }
-    server.log("Cloud backup setup started.")
-    server.log("Please choose a provider: gdrive, mega, filen")
-    server.log("Run: !cloudbackup setup <provider>")
-    server.log("Example: !cloudbackup setup gdrive")
+
+    server.log_warning("=" * 60)
+    server.log("CLOUD BACKUP INITIAL SETUP")
+    server.log("Choose one provider using:")
+    server.log("   !cloudbackup setup gdrive")
+    server.log("   !cloudbackup setup mega")
+    server.log("   !cloudbackup setup filen")
+    server.log_warning("=" * 60)
+
 
 def continue_setup_with_provider(provider):
-    """Download template and begin field prompts."""
     state = server.persistent.get('cloud_setup_state')
     if not state:
         start_setup()
@@ -288,277 +154,269 @@ def continue_setup_with_provider(provider):
 
     provider = provider.lower()
     if provider not in SUPPORTED_PROVIDERS:
-        server.log_error(f"Unsupported provider: {provider}. Choose one of: {', '.join(SUPPORTED_PROVIDERS)}")
+        server.log_error(f"Unsupported provider: {provider}. Available: {', '.join(SUPPORTED_PROVIDERS)}")
         return
 
     server.log(f"Provider selected: {provider}")
-    # fetch template from GitHub
+
+    # Show provider instructions only now
+    show_provider_instructions(provider)
+
+    # Fetch template
     template_local = fetch_provider_template(provider)
-    if not template_local:
-        server.log_error("Unable to retrieve provider template. You may create the config manually or check repository URL.")
+    if not template_local or not os.path.exists(template_local):
+        server.log_error("Template not found - cannot continue.")
         return
 
-    # Load template and use its keys as required fields
     try:
-        with open(template_local, 'r') as f:
-            template = json.load(f)
-    except Exception as e:
-        server.log_error("Invalid template format: " + str(e))
+        with open(template_local, "r", encoding="utf-8") as f:
+            template_data = json.load(f)
+    except:
+        server.log_error("Failed to parse template file.")
         return
 
-    # Determine required fields from template: we expect a flat JSON of keys the user must fill.
-    # If template contains nested structure, you can adapt this logic. For now, take top-level keys whose values are empty or placeholder.
-    fields = []
-    for k, v in template.items():
-        # decide that fields with None or empty string or placeholder "<>" are to be filled
-        if v is None or (isinstance(v, str) and (v.strip() == "" or v.startswith("<"))):
-            fields.append(k)
-    server.persistent['cloud_setup_state'] = {
-        'stage': 'fill_fields',
-        'provider': provider,
-        'template_path': template_local,
-        'fields': fields,
-        'current_field_index': 0,
-        'template': template,
-        'values': {}
-    }
-
-    if not fields:
-        server.log("Template did not contain obvious empty fields. Check the template file: " + template_local)
-        server.log("If the template is complete, run: !cloudbackup finalize")
+    required_fields = list(template_data.get("fields", []))
+    if not required_fields:
+        server.log_error("No fields listed in template - aborting.")
         return
 
-    server.log("Beginning interactive field input. For help about a field, run: !cloudbackup help <field>")
-    prompt_next_field()
-
-def prompt_next_field():
-    state = server.persistent.get('cloud_setup_state')
-    if not state:
-        server.log_error("Setup state missing. Run !cloudbackup setup to start.")
-        return
-    if state['stage'] != 'fill_fields':
-        server.log("No fields to fill currently. Stage: " + str(state.get('stage')))
-        return
-
-    idx = state['current_field_index']
-    fields = state.get('fields', [])
-    if idx >= len(fields):
-        server.log_success("All fields collected. Run: !cloudbackup finalize to write configuration to disk.")
-        return
-
-    field = fields[idx]
-    server.log(f"Field {idx+1}/{len(fields)}: {field}")
-    server.log("Run: !cloudbackup set " + field + " <value>")
-    server.log("Example: !cloudbackup set " + field + " my-secret-token")
-
-def set_field_value(field_name, value):
-    state = server.persistent.get('cloud_setup_state')
-    if not state:
-        server.log_error("No active setup. Start it with !cloudbackup setup")
-        return
-
-    if state['stage'] != 'fill_fields':
-        server.log_error("Not currently filling fields.")
-        return
-
-    fields = state.get('fields', [])
-    try:
-        idx = fields.index(field_name)
-    except ValueError:
-        server.log_error("Field not recognized in template: " + field_name)
-        return
-
-    state['values'][field_name] = value
-    # advance index only if the field being set is the current one
-    if idx == state['current_field_index']:
-        state['current_field_index'] = idx + 1
+    state['stage'] = "fill_fields"
+    state['provider'] = provider
+    state['template_file'] = template_local
+    state['fields'] = required_fields
+    state['field_info'] = template_data.get("field_info", {})
     server.persistent['cloud_setup_state'] = state
 
-    server.log_success(f"Set {field_name} = {value}")
-    prompt_next_field()
+    server.log_success(f"{provider.upper()} requires setup of: {', '.join(required_fields)}")
+    server.log("")
 
-def show_help(topic=None):
-    """Show help text. If topic is None, show generic setup help."""
-    if not topic:
-        server.log("Setup help:")
-        server.log(" - Start setup: !cloudbackup setup")
-        server.log(" - Pick provider: !cloudbackup setup <provider>  (gdrive|mega|filen)")
-        server.log(" - During setup: fill fields with: !cloudbackup set <field> <value>")
-        server.log(" - To see what to fill next: !cloudbackup next")
-        server.log(" - Finalize: !cloudbackup finalize")
-        server.log("You can run !cloudbackup help <field> to get provider-specific guidance (if available).")
+    # Show field descriptions
+    field_info = state.get('field_info', {})
+    for field in required_fields:
+        info = field_info.get(field, {})
+        if info:
+            server.log(f"  • {field}:")
+            if info.get('description'):
+                server.log(f"    {info['description']}")
+            if info.get('example'):
+                server.log(f"    Example: {info['example']}")
+        else:
+            server.log(f"  • {field}")
+
+    server.log("")
+    server.log("Please enter values using:")
+    server.log("!cloudbackup field <name> <value>")
+
+
+def fill_field(name, value):
+    state = server.persistent.get('cloud_setup_state')
+    if not state or state['stage'] != "fill_fields":
+        server.log_error("Setup is not active.")
         return
 
-    # provider-field specific hints (add more entries as needed)
-    if topic.lower() in ['gdrive', 'google', 'google drive']:
-        server.log("Google Drive setup hints:")
-        server.log(" - You can use a service account JSON key file (recommended for servers).")
-        server.log(" - Create a service account in Google Cloud Console, enable Drive API, create key and save JSON.")
-        server.log(" - Upload the JSON to your server and set credentials_file to its path during setup.")
-        server.log(" - Alternatively, implement an OAuth flow externally and provide a credentials file path.")
-    elif topic.lower() == 'mega':
-        server.log("Mega setup hints:")
-        server.log(" - Mega often requires login credentials (email/password) or session file.")
-        server.log(" - Consider using 'mega.py' library on the host: pip install mega.py")
-        server.log(" - Provide a credentials JSON with fields like {\"email\": \"you@example.com\", \"password\": \"pass\"}")
-    elif topic.lower() == 'filen':
-        server.log("Filen setup hints:")
-        server.log(" - Filen API usually uses a token. Create or obtain API token from Filen account.")
-        server.log(" - Provide a credentials JSON with {\"api_token\": \"TOKEN\"}")
-    else:
-        server.log(f"No help available for topic: {topic}")
+    if name not in state['fields']:
+        server.log_error(f"Unknown field: {name}")
+        server.log(f"Expected fields: {', '.join(state['fields'])}")
+        return
 
-def finalize_setup_and_write_config():
+    # Validate field values
+    provider = state.get('provider', '')
+    if provider == 'gdrive' and name == 'credentials_file':
+        # Check if file exists
+        if not os.path.exists(value):
+            server.log_error(f"Credentials file not found: {value}")
+            server.log("Please provide the full path to your Google Service Account JSON file.")
+            return
+        # Check if it's a JSON file
+        if not value.lower().endswith('.json'):
+            server.log_warning("Warning: File does not have .json extension. Make sure it's a valid JSON file.")
+
+    state.setdefault("field_values", {})[name] = value
+    server.log_success(f"✓ Set {name} = {value}")
+
+    # check progress
+    pv = state.get("field_values", {})
+    missing = [f for f in state['fields'] if f not in pv]
+    if not missing:
+        server.log_success("All fields filled! Finalizing setup...")
+        finalize_setup()
+    else:
+        server.log(f"Still missing ({len(missing)}): {', '.join(missing)}")
+        # Show info for next missing field
+        field_info = state.get('field_info', {})
+        next_field = missing[0]
+        info = field_info.get(next_field, {})
+        if info:
+            server.log("")
+            server.log(f"Next field: {next_field}")
+            if info.get('description'):
+                server.log(f"  {info['description']}")
+            if info.get('example'):
+                server.log(f"  Example: {info['example']}")
+        server.log("")
+        server.log(f"Use: !cloudbackup field {next_field} <value>")
+
+
+def finalize_setup():
     state = server.persistent.get('cloud_setup_state')
     if not state:
         server.log_error("No active setup to finalize.")
         return
 
-    provider = state.get('provider')
-    template_path = state.get('template_path')
-    template = state.get('template', {})
-    values = state.get('values', {})
+    config = load_config()
+    provider = state['provider']
+    config['provider'] = provider
+    config['settings'] = state.get("field_values", {})
 
-    # Merge values into template
-    for k, v in values.items():
-        template[k] = v
+    save_config(config)
+    server.log_success("Cloud backup setup completed.")
+    del server.persistent['cloud_setup_state']
 
-    # Save a credentials JSON path if template included credentials inline, else write a dedicated credentials file
-    # For safety we will write a credentials file in server directory and refer to it in config
-    creds_filename = f"cloud_{provider}_credentials.json"
-    creds_path = os.path.join(server.directory, creds_filename)
 
-    # Decide which keys belong in credentials vs general config:
-    # For simplicity: save entire template as credentials file, and keep provider + upload options in main config
-    try:
-        with open(creds_path, 'w') as f:
-            json.dump(template, f, indent=4)
-    except Exception as e:
-        server.log_error("Failed to write credentials file: " + str(e))
+# ---------------------------------------------------------
+# Backup Upload (placeholder)
+# ---------------------------------------------------------
+def upload_backup():
+    config = load_config()
+    if not config.get("provider"):
+        server.log_error("Backup provider not configured. Run !cloudbackup setup.")
         return
 
-    # Build the main config
-    main_config = load_config()
-    main_config['enabled'] = True
-    main_config['provider'] = provider
-    main_config['credentials_file'] = creds_path
-    # Keep existing upload_frequency and max_cloud_backups if present
-    save_ok = save_config(main_config)
-    if save_ok:
-        server.log_success("Configuration finalized and saved.")
-        server.log_success(f"Main config: {CONFIG_FILE}")
-        server.log_success(f"Credentials file created: {creds_path}")
-        # clear setup state
-        if 'cloud_setup_state' in server.persistent:
-            del server.persistent['cloud_setup_state']
+    provider = config['provider']
+    if provider == "gdrive":
+        if not check_google_deps():
+            server.log_error("Missing Google Drive libraries. See setup instructions.")
+            return
+
+        server.log_success("Pretending to upload to Google Drive (logic coming next).")
+
+    elif provider == "mega":
+        server.log_success("Pretending to upload to Mega (logic coming next).")
+
+    elif provider == "filen":
+        server.log_success("Pretending to upload to Filen (logic coming next).")
+
     else:
-        server.log_error("Failed to save main configuration.")
+        server.log_error(f"Unknown provider: {provider}")
 
-# ===========================
-# amscript EVENTS
-# ===========================
 
-@server.on_start(data):
-    """
-    On server start: if not configured, show initial instructions and create default config file.
-    """
-    config = load_config()
-    # create config file if not exists (pre-populate)
-    if not os.path.exists(CONFIG_FILE):
-        save_config(DEFAULT_CONFIG.copy())
-
-    if not config.get('enabled', False) or not config.get('provider'):
-        show_initial_instructions()
-    else:
-        server.log_success("Cloud Backup Manager active.")
-        server.log(f"Provider: {config.get('provider')}")
-        server.log(f"Upload frequency: {config.get('upload_frequency')}")
-
-@server.on_loop(interval=1, unit='hour'):
-    """
-    Every 1 hour check for new backups and upload if configured.
-    """
-    try:
-        config = load_config()
-        if config.get('enabled'):
-            latest = backup.latest
-            if latest:
-                last_uploaded = server.persistent.get('last_backup_uploaded')
-                if last_uploaded != latest.path:
-                    if upload_backup(config):
-                        server.persistent['last_backup_uploaded'] = latest.path
-    except Exception as e:
-        server.log_error("Loop error: " + str(e))
-        server.log_error(traceback.format_exc())
-
-# Command alias for admins / console to control setup and operations
-@player.on_alias(player, command='cloudbackup', arguments={'action': False, 'arg1': False, 'arg2': False}, permission='op', description='Manage cloud backups')
+# ---------------------------------------------------------
+# Command Handler
+# ---------------------------------------------------------
+@player.on_alias(player, command='cloudbackup', arguments={'action': False, 'arg1': False, 'arg2': False, 'arg3': False, 'arg4': False, 'arg5': False}, permission='op', description='Manage cloud backups')
 def cloudbackup_command(player, command='cloudbackup', arguments=None):
-    # this wrapper receives arguments dict where action is first argument (optional)
+    """
+    Handle cloudbackup commands
+    Usage: !cloudbackup <action> [args...]
+    """
     if not arguments or not arguments.get('action'):
-        player.log("CloudBackup commands:")
-        player.log("  !cloudbackup setup                - Start interactive setup")
-        player.log("  !cloudbackup setup <provider>     - Choose provider (gdrive|mega|filen)")
-        player.log("  !cloudbackup set <field> <value>  - Set a field during setup")
-        player.log("  !cloudbackup next                 - Show next field to fill")
-        player.log("  !cloudbackup finalize             - Finish setup and save config")
-        player.log("  !cloudbackup upload               - Force an upload now")
-        player.log("  !cloudbackup status               - Show current configuration")
-        player.log("  !cloudbackup help [topic|field]   - Show help for a topic")
+        player.log("Usage: !cloudbackup <action> [args...]")
+        player.log("Use !cloudbackup help for available commands.")
         return
 
     action = arguments['action'].lower()
-    # optional extra args
-    arg1 = arguments.get('arg1')
-    arg2 = arguments.get('arg2')
 
-    if action == 'setup':
-        # If provider argument provided, move to next stage
-        if arg1:
-            continue_setup_with_provider(arg1)
+    if action == "setup":
+        # !cloudbackup setup [provider]
+        if arguments.get('arg1'):
+            continue_setup_with_provider(arguments['arg1'])
         else:
             start_setup()
+        return
 
-    elif action == 'set':
-        if not arg1 or not arg2:
-            player.log_error("Usage: !cloudbackup set <field> <value>")
+    elif action == "field":
+        # !cloudbackup field <name> <value...>
+        if not arguments.get('arg1') or not arguments.get('arg2'):
+            player.log("Usage: !cloudbackup field <name> <value>")
             return
-        set_field_value(arg1, arg2)
+        # Combine all args from arg2 onwards to support values with spaces
+        value_parts = [arguments['arg2']]
+        for i in range(3, 6):  # arg3, arg4, arg5
+            arg_key = f'arg{i}'
+            if arguments.get(arg_key):
+                value_parts.append(arguments[arg_key])
+        value = " ".join(value_parts)
+        fill_field(arguments['arg1'], value)
+        return
 
-    elif action == 'next':
-        prompt_next_field()
+    elif action == "status":
+        cfg = load_config()
+        player.log(f"Provider: {cfg.get('provider')}")
+        player.log(f"Settings: {cfg.get('settings')}")
+        return
 
-    elif action == 'finalize':
-        finalize_setup_and_write_config()
+    elif action == "backup":
+        upload_backup()
+        return
 
-    elif action == 'upload':
-        # Force upload now
-        config = load_config()
-        if not config.get('enabled'):
-            player.log_error("Cloud backup is not configured. Run !cloudbackup setup first.")
+    elif action == "progress":
+        # Show setup progress
+        state = server.persistent.get('cloud_setup_state')
+        if not state or state.get('stage') != 'fill_fields':
+            player.log("No active setup in progress.")
             return
-        player.log("Starting forced upload...")
-        if upload_backup(config):
-            player.log_success("Upload completed.")
-        else:
-            player.log_error("Upload failed. Check server console for details.")
 
-    elif action == 'status':
-        config = load_config()
-        player.log_success("=== Cloud Backup Status ===")
-        player.log(f"Enabled: {'Yes' if config.get('enabled') else 'No'}")
-        player.log(f"Provider: {config.get('provider', 'Not configured')}")
-        player.log(f"Credentials file: {config.get('credentials_file', 'N/A')}")
-        player.log(f"Frequency: {config.get('upload_frequency', 'N/A')}")
-        player.log(f"Max cloud backups: {config.get('max_cloud_backups', 'N/A')}")
-        player.log(f"Last upload: {config.get('last_upload', 'Never')}")
+        pv = state.get("field_values", {})
+        fields = state.get('fields', [])
+        filled = [f for f in fields if f in pv]
+        missing = [f for f in fields if f not in pv]
 
-    elif action == 'help':
-        if arg1:
-            # provide topic help
-            show_help(arg1)
+        player.log_success(f"Setup Progress: {len(filled)}/{len(fields)} fields completed")
+        if filled:
+            player.log(f"Completed: {', '.join(filled)}")
+        if missing:
+            player.log(f"Missing: {', '.join(missing)}")
+        return
+
+    elif action == "help":
+        # Show help for a specific field or general help
+        field_name = arguments.get('arg1')
+        if not field_name:
+            player.log("Cloud Backup Commands:")
+            player.log("  !cloudbackup setup [provider]  - Start setup (providers: gdrive, mega, filen)")
+            player.log("  !cloudbackup field <name> <value>  - Set a configuration field")
+            player.log("  !cloudbackup progress  - Show setup progress")
+            player.log("  !cloudbackup status  - Show current configuration")
+            player.log("  !cloudbackup backup  - Force an immediate backup upload")
+            player.log("  !cloudbackup help [field]  - Show help for a field")
         else:
-            show_help(None)
+            # Show help for specific field
+            state = server.persistent.get('cloud_setup_state')
+            if not state:
+                player.log_error("No active setup. Start with: !cloudbackup setup")
+                return
+
+            field_info = state.get('field_info', {})
+            info = field_info.get(field_name, {})
+            if info:
+                player.log(f"Field: {field_name}")
+                if info.get('description'):
+                    player.log(f"  {info['description']}")
+                if info.get('example'):
+                    player.log(f"  Example: {info['example']}")
+            else:
+                player.log(f"No help available for field: {field_name}")
+        return
 
     else:
-        player.log_error("Unknown action: " + action)
+        player.log_error("Unknown action.")
+        player.log("Use !cloudbackup help for available commands.")
+
+
+# ---------------------------------------------------------
+# Startup behavior
+# ---------------------------------------------------------
+
+@server.on_start(data)
+def on_server_start(data):
+    """
+    On server start: check if cloud backup is configured and show status.
+    """
+    cfg = load_config()
+    if not cfg.get("provider"):
+        server.log_warning("=" * 60)
+        server.log_warning("Cloud Backup not configured.")
+        server.log("Run: !cloudbackup setup")
+        server.log_warning("=" * 60)
+    else:
+        server.log(f"Cloud Backup ready (provider: {cfg.get('provider')})")

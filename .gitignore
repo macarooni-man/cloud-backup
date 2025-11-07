@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDEs
+.idea/
+*.swp
+*.swo
+*~
+settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# auto-mcs specific
+*.log
+amscript-docs.md
+
+# Sensitive data - DO NOT COMMIT CREDENTIALS!
+*_credentials.json
+cloud_backup_config.json
+!*_template.json
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
