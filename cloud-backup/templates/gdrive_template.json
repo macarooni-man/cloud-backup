@@ -1,9 +1,0 @@
-{
-  "fields": ["credentials_file"],
-  "field_info": {
-    "credentials_file": {
-      "description": "Full path to your Google Service Account JSON file",
-      "example": "C:\\path\\to\\service-account-key.json (Windows) or /path/to/service-account-key.json (Linux/Mac)"
-    }
-  }
-}

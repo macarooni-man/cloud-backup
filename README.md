@@ -8,23 +8,26 @@ A collection of amscripts for **auto-mcs** - the automated Minecraft server mana
 
 ## 📦 Available Scripts
 
-### Cloud Backup (v0.2-pre)
+### Cloud Backup (v0.3-pre)
 
-Upload server backups automatically to cloud storage providers.
+Upload server backups automatically to 40+ cloud storage providers using **rclone**.
 
-**Status**: ✅ Setup flow functional | 🚧 Uploads in development
+**Status**: ✅ Setup and upload functional | Ready for testing
 
-**Supported Providers**:
-- ✅ **Google Drive** (implemented)
-- 🚧 **Mega** (coming soon)
-- 🚧 **Filen** (coming soon)
+**Supported Providers** (via rclone):
+- Google Drive, OneDrive, Dropbox
+- Mega, Filen, Box, pCloud
+- Amazon S3, MinIO, Backblaze
+- Azure Blob Storage
+- **40+ total providers!**
 
 **Key Features**:
-- Interactive guided setup with field validation
-- Template-based configuration downloaded from GitHub
-- Built-in help system and progress tracking
-- Automatic library dependency detection
-- Secure credential storage in server directory
+- Universal setup using rclone (one tool for all providers)
+- OAuth authentication handled by rclone (simple setup)
+- Interactive guided setup with step-by-step instructions
+- No Python library dependencies required
+- Remote validation (checks if rclone remote exists)
+- Secure credential storage via rclone
 
 **Documentation**: [cloud-backup/README.md](cloud-backup/README.md)
 
@@ -35,11 +38,9 @@ Upload server backups automatically to cloud storage providers.
 ```
 amscripts/
 ├── cloud-backup/           # Cloud backup script
-│   ├── cloud_backup.ams    # Main script file
+│   ├── cloud_backup.ams    # Main script file (v0.3-pre)
 │   ├── templates/          # Provider configuration templates
-│   │   ├── gdrive_template.json
-│   │   ├── mega_template.json
-│   │   └── filen_template.json
+│   │   └── rclone_template.json  # Universal rclone template
 │   ├── README.md           # Detailed user guide
 │   └── TESTING.md          # Testing instructions
 ├── CHANGELOG.md            # Version history and changes
@@ -87,7 +88,7 @@ Each script has its own commands and setup process. See individual README files 
 ```
 !cloudbackup help
 !cloudbackup setup gdrive
-!cloudbackup field credentials_file /path/to/service-account.json
+!cloudbackup field remote_name gdrive-backup
 ```
 
 ---
@@ -112,9 +113,9 @@ Each script has its own commands and setup process. See individual README files 
 See individual script README files for specific dependencies.
 
 **Cloud Backup:**
+- **rclone** installed on your system ([rclone.org](https://rclone.org/downloads/))
 - Internet connection (template downloads, uploads)
-- Provider account (Google Drive, Mega, or Filen)
-- Provider-specific Python libraries (installed via pip)
+- Provider account (Google Drive, OneDrive, Dropbox, Mega, Filen, S3, etc.)
 - Operator permissions for commands
 
 ---
@@ -172,28 +173,32 @@ Contributions are welcome! Here's how you can help:
 ## 📊 Project Status
 
 ### Cloud Backup
-- **Version**: 0.2-pre
-- **Status**: Pre-release (setup functional, uploads in development)
-- **Last Updated**: 2025-11-07
+- **Version**: 0.3-pre (rclone)
+- **Status**: Pre-release (setup and upload functional, ready for testing)
+- **Last Updated**: 2025-11-08
 
 **Completed**:
-- ✅ Core script architecture with amscript API
-- ✅ Interactive setup flow with validation
-- ✅ Template system with GitHub integration
-- ✅ Google Drive upload implementation
-- ✅ Help and progress tracking commands
-- ✅ Comprehensive documentation
+- ✅ rclone integration (40+ providers supported)
+- ✅ Universal upload architecture (no provider-specific code)
+- ✅ Interactive setup flow with rclone validation
+- ✅ Remote name validation and error handling
+- ✅ Upload functionality with timeout handling
+- ✅ Provider-specific setup instructions
+- ✅ Comprehensive documentation and testing guides
 
-**In Progress**:
-- 🚧 Mega upload implementation
-- 🚧 Filen upload implementation
+**Major Change from v0.2-pre**:
+- 🚀 **Complete rewrite** using rclone instead of provider-specific Python libraries
+- 🎯 **40+ providers** now supported (vs 3 in v0.2-pre)
+- 🛠️ **Zero Python dependencies** (just rclone binary)
+- ⚡ **Simplified setup** (1 field vs 10+ fields for Google Drive)
 
 **Planned**:
-- ⏳ Automatic backup scheduling
-- ⏳ Backup retention policies
-- ⏳ Multiple backup destinations
-- ⏳ Pre-upload encryption
-- ⏳ S3-compatible storage support
+- ⏳ Automatic backup scheduling via `@server.on_loop()`
+- ⏳ Backup retention policies (max backups, auto-cleanup)
+- ⏳ Multiple backup destinations support
+- ⏳ Pre-upload encryption option
+- ⏳ Backup verification and integrity checks
+- ⏳ Email/webhook notifications
 
 ---
 
@@ -233,4 +238,4 @@ For issues, questions, or feature requests:
 
 *Repository maintained by kalashnikxvxiii*
 
-*Last updated: 2025-11-07*
+*Last updated: 2025-11-08*

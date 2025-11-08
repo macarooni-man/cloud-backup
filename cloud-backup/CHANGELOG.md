@@ -8,15 +8,141 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Mega upload implementation (`upload_to_mega()` function)
-- Filen upload implementation (`upload_to_filen()` function)
-- Automatic backup upload scheduling system
+- Automatic backup upload scheduling system via `@server.on_loop()`
 - Backup retention policies (max backups, auto-cleanup)
 - Multiple backup destinations support
 - Pre-upload encryption
 - Backup verification and integrity checks
-- S3-compatible storage support (AWS, MinIO, Backblaze)
-- Automatic Python dependency installation
+- Progress bars for uploads
+- Email notifications on upload success/failure
+- Webhook integration for upload events
+
+---
+
+## [0.3-pre] - 2025-11-08
+
+### 🚀 MAJOR REWRITE: rclone Integration
+
+This version completely replaces the provider-specific implementation with **rclone**, a universal cloud storage CLI tool that supports **40+ cloud providers** out of the box!
+
+### ✅ What Works
+- **Script compiles and loads** in auto-mcs amscript engine ✅
+- **rclone detection** - automatically checks if rclone is installed ✅
+- **Universal setup flow** - works with any rclone-supported provider ✅
+- **Interactive provider instructions** - guides users through rclone configuration ✅
+- **Remote validation** - verifies rclone remote exists before finalizing setup ✅
+- **Upload functionality** - uses `rclone copy` for universal uploads ✅
+
+### Added
+- **rclone integration** - Universal cloud upload support (40+ providers)
+- **Provider-agnostic architecture** - No longer tied to Google Drive/Mega/Filen APIs
+- **Automatic rclone installation check** with platform-specific instructions
+- **Remote validation** - Checks if rclone remote exists using `rclone listremotes`
+- **Provider-specific setup tips** for popular providers (Google Drive, OneDrive, Dropbox, Mega, Filen, S3)
+- **Timeout handling** for uploads (10-minute timeout with proper error messages)
+- **Progress display** using rclone's `-P` flag during uploads
+- **Simplified template system** - Single `rclone_template.json` for all providers
+
+### Changed
+- **Completely removed Python API dependencies**:
+  - ❌ No more `google-api-python-client`
+  - ❌ No more `mega.py`
+  - ❌ No more Filen SDK
+  - ✅ Just requires rclone binary (cross-platform, single executable)
+- **Upload logic** now uses `subprocess.run()` with `rclone copy`
+- **Template system** simplified to single universal template
+- **Configuration structure** streamlined to `provider` + `remote_name` only
+- **Setup instructions** now guide users to configure rclone externally first
+- **Remote path format** standardized: `{remote}:minecraft-backups/{server_name}/`
+
+### Removed
+- **Provider-specific upload functions** (`upload_to_gdrive()`, `upload_to_mega()`, `upload_to_filen()`)
+- **Provider-specific templates** (`gdrive_template.json`, `mega_template.json`, `filen_template.json`)
+- **Python library dependency management** - no longer needed with rclone
+- **Service account JSON parsing** - handled by rclone config
+- **OAuth flow handling** - delegated to rclone interactive setup
+
+### Benefits Over v0.2-pre
+| Feature | v0.2-pre | v0.3-pre (rclone) |
+|---------|----------|-------------------|
+| **Supported providers** | 3 (Google Drive, Mega, Filen) | **40+** (all rclone providers) |
+| **Python dependencies** | 4-10 packages per provider | **0** (just rclone binary) |
+| **Setup complexity** | 10+ fields for Google Drive | **1 field** (remote name) |
+| **Authentication** | In-script OAuth/API keys | **Delegated to rclone** |
+| **Upload reliability** | Custom implementation | **Battle-tested rclone** |
+| **Progress tracking** | Not implemented | **Built-in with -P flag** |
+| **Error handling** | Basic | **Comprehensive rclone errors** |
+| **Cross-platform** | Python environment issues | **Single binary works everywhere** |
+
+### Supported Providers (Examples)
+- Google Drive (`gdrive`)
+- Microsoft OneDrive (`onedrive`)
+- Dropbox (`dropbox`)
+- Mega (`mega`)
+- Filen (`filen`)
+- Amazon S3 / MinIO / Backblaze (`s3`)
+- Azure Blob Storage (`azureblob`)
+- Box (`box`)
+- pCloud (`pcloud`)
+- **...and 30+ more!** See https://rclone.org/
+
+### Migration from v0.2-pre
+
+**BREAKING CHANGE**: This version is NOT backward compatible with v0.2-pre.
+
+If you used v0.2-pre:
+
+1. **Install rclone** on your system:
+   - Windows: `winget install Rclone.Rclone` or download from https://rclone.org/downloads/
+   - Linux: `curl https://rclone.org/install.sh | sudo bash`
+   - macOS: `brew install rclone`
+
+2. **Configure rclone remote**:
+   ```bash
+   rclone config
+   ```
+   Follow the interactive setup for your provider.
+
+3. **Test your remote**:
+   ```bash
+   rclone lsd your-remote-name:
+   ```
+
+4. **Reconfigure in amscript**:
+   ```
+   !cloudbackup setup <provider>
+   !cloudbackup field remote_name your-remote-name
+   ```
+
+5. **Delete old configuration**:
+   - Old config: `<server_directory>/cloud_backup_config.json` (from v0.2-pre)
+   - Old credentials: `<server_directory>/cloud_*_credentials.json`
+
+### Known Issues
+- Upload progress (`-P` flag) may not display in amscript console (rclone limitation)
+- Setup state is still stored in `server.persistent` and lost on restart
+- No automatic scheduling yet (planned for future version)
+
+### Technical Details
+
+**Lines of code**: 485 lines (down from 627 in v0.2-pre)
+
+**Dependencies**:
+- **Runtime**: rclone binary (externally installed)
+- **Python modules**: `json`, `os`, `subprocess`, `urllib.request` (all stdlib)
+
+**Configuration format**:
+```json
+{
+  "provider": "gdrive",
+  "remote_name": "gdrive-backup"
+}
+```
+
+**Upload command executed**:
+```bash
+rclone copy <backup_path> <remote_name>:minecraft-backups/<server_name>/ -P
+```
 
 ---
 

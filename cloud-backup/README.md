@@ -1,33 +1,38 @@
 # Cloud Backup for auto-mcs (amscript)
-**Version:** 0.2-pre
+**Version:** 0.3-pre
 **Author:** kalashnikxvxiii
 
-Cloud Backup is an amscript that allows Minecraft server owners using **auto-mcs** to automatically upload world backups to a supported cloud storage provider.
+Cloud Backup is an amscript that allows Minecraft server owners using **auto-mcs** to automatically upload world backups to cloud storage using **rclone**.
 
-Supported providers:
-- **Google Drive** (fully implemented)
-- **Mega** (coming soon)
-- **Filen** (coming soon)
+**Supports 40+ cloud providers including:**
+- Google Drive
+- Microsoft OneDrive
+- Dropbox
+- Mega
+- Filen
+- Amazon S3 / MinIO / Backblaze
+- Azure Blob Storage
+- Box, pCloud, and many more!
+
+Full list: [rclone.org](https://rclone.org/)
 
 > ⚠️ **Pre-release notice:**
 > This project is currently under active development.
-> Currently only the setup flow and Google Drive integration are functional.
-> Mega and Filen upload implementations are coming next.
+> Setup and upload functionality are implemented and ready for testing.
 
 ---
 
 ## ✅ Features
 
-✔ Upload server backups to cloud storage
-✔ Choose one of three supported providers
-✔ Guided interactive setup with field descriptions and examples
-✔ Template-based configuration system downloaded from GitHub
-✔ Built-in help system for each configuration field
-✔ Progress tracking during setup
-✔ Field validation (file existence checks, format validation)
+✔ Upload server backups to 40+ cloud storage providers
+✔ Universal setup using rclone (one tool for all providers)
+✔ OAuth authentication handled by rclone (no complex credential files)
+✔ Guided interactive setup with step-by-step instructions
+✔ Automatic rclone installation detection
+✔ Remote validation (checks if rclone remote exists)
 ✔ Persistent configuration stored in server directory
-✔ Automatic library dependency detection
-✔ Modular design for future provider expansions
+✔ No Python library dependencies required
+✔ Provider-specific setup tips for popular services
 
 ---
 
@@ -35,13 +40,35 @@ Supported providers:
 
 - **auto-mcs** installed and running
 - **amscript enabled** in auto-mcs settings
-- Internet connection (for template downloads & uploads)
+- **rclone installed** (see installation guide below)
+- Internet connection (for uploads)
 - **Operator permissions** (commands require OP level)
-- Provider-specific Python libraries (installed per-provider, see below)
+- Cloud storage account (Google Drive, OneDrive, Dropbox, etc.)
 
 ---
 
 ## ✅ Installation
+
+### Step 1: Install rclone
+
+**Windows:**
+```powershell
+# Option 1: Download from https://rclone.org/downloads/
+# Option 2: Use winget
+winget install Rclone.Rclone
+```
+
+**Linux:**
+```bash
+curl https://rclone.org/install.sh | sudo bash
+```
+
+**macOS:**
+```bash
+brew install rclone
+```
+
+### Step 2: Install the script
 
 1. Download `cloud_backup.ams` from this repository
 2. Place it in the auto-mcs amscript folder:
@@ -75,9 +102,11 @@ If the script is correctly installed, the console will show:
 ```
 ============================================================
 Cloud Backup not configured.
-Run: !cloudbackup setup
+Run: !cloudbackup setup <provider>
 ============================================================
 ```
+
+If rclone is not installed, you'll see installation instructions.
 
 ---
 
@@ -99,87 +128,56 @@ Shows:
 
 ### Start Interactive Setup
 
-**Step 1: Choose a provider**
+**Step 1: Choose a provider and start setup**
 ```
 !cloudbackup setup gdrive
 ```
-or
-```
-!cloudbackup setup mega
-```
-or
-```
-!cloudbackup setup filen
-```
 
-This will:
-- Download the provider template from GitHub
-- Show setup instructions for the selected provider
-- Display required fields with descriptions and examples
-- Guide you through library installation if needed
+Replace `gdrive` with your provider choice:
+- `gdrive` (Google Drive)
+- `onedrive` (Microsoft OneDrive)
+- `dropbox` (Dropbox)
+- `mega` (Mega)
+- `filen` (Filen)
+- `s3` (Amazon S3 / MinIO / Backblaze)
+- And 30+ more! See [rclone.org](https://rclone.org/)
 
-**Step 2: Fill required fields**
+This will show you:
+- rclone installation status
+- Step-by-step instructions to configure your remote
+- Provider-specific setup tips
 
-The script will show you which fields are needed. Fill them one by one:
+**Step 2: Configure rclone remote**
 
-```
-!cloudbackup field <name> <value>
-```
-
-Example for Google Drive:
-```
-!cloudbackup field credentials_file /path/to/service-account-key.json
+Open a terminal/command prompt and run:
+```bash
+rclone config
 ```
 
-Example for Mega:
-```
-!cloudbackup field email your@email.com
-!cloudbackup field password YourSecurePassword
-```
+Follow the interactive prompts:
+1. Choose `n) New remote`
+2. Enter a name (e.g., `gdrive-backup`, `onedrive-backup`)
+3. Select your provider type from the list
+4. Follow OAuth flow (browser will open for authentication)
+5. Complete the configuration
 
-Example for Filen:
-```
-!cloudbackup field api_token your_api_token_here
-!cloudbackup field folder_id your_folder_id_or_none
-```
-
-**Step 3: Automatic finalization**
-
-Once all fields are filled, the setup automatically finalizes and saves your configuration!
-
----
-
-### Check Setup Progress
-
-During setup, check your progress at any time:
-```
-!cloudbackup progress
-```
-
-Shows:
-- How many fields are completed
-- Which fields are still missing
-- Current progress percentage
-
----
-
-### Get Help for a Specific Field
+**Step 3: Set the remote name in the script**
 
 ```
-!cloudbackup help <field_name>
+!cloudbackup field remote_name <your-remote-name>
 ```
 
 Example:
 ```
-!cloudbackup help credentials_file
+!cloudbackup field remote_name gdrive-backup
 ```
 
-Shows:
-- Field description
-- Example value
-- Requirements
+**Step 4: Done!**
+
+Setup automatically completes when you set the remote name. The script validates that the remote exists in rclone.
 
 ---
+
 
 ### Check Current Configuration
 
@@ -189,97 +187,120 @@ Shows:
 
 Shows:
 - Selected provider
-- Current settings (credentials are stored but not displayed)
+- Configured remote name
+- rclone installation status
 
 ---
 
-### Force a Backup Upload
+### Upload a Backup
 
 ```
 !cloudbackup backup
 ```
 
-Immediately triggers a backup upload to your configured provider.
+Uploads the latest backup to your cloud storage at:
+```
+<remote>:minecraft-backups/<server-name>/
+```
 
-> **Note:** Currently only Google Drive upload is fully implemented. Mega and Filen will return a placeholder message.
+The upload may take several minutes depending on backup size and internet speed.
 
 ---
 
-## ✅ Provider Setup Guides
+## ✅ Quick Setup Examples
 
 ### Google Drive
 
-**Prerequisites:**
-1. Create a Google Cloud project at [console.cloud.google.com](https://console.cloud.google.com)
-2. Enable the Google Drive API
-3. Create a Service Account
-4. Generate and download a JSON key file
-5. Upload the JSON file to your server
-
-**Required Python Libraries:**
 ```bash
-# Windows
-pip install --target "%appdata%\.auto-mcs\Tools\amscript\libs" google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
-
-# Linux
-pip install --target ~/.auto-mcs/Tools/amscript/libs google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
-
-# macOS
-pip install --target "~/Library/Application Support/auto-mcs/Tools/amscript/libs" google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
-```
-
-**Setup Commands:**
-```
+# 1. Start setup in-game
 !cloudbackup setup gdrive
-!cloudbackup field credentials_file /path/to/service-account-key.json
-```
 
-The script will automatically:
-- Validate the file exists
-- Check it's a JSON file
-- Save the configuration
+# 2. In terminal, configure rclone
+rclone config
+# Choose: n) New remote
+# Name: gdrive-backup
+# Type: drive (Google Drive)
+# Follow OAuth flow in browser
+
+# 3. Set remote name in-game
+!cloudbackup field remote_name gdrive-backup
+```
 
 ---
 
-### Mega (Coming Soon)
+### Microsoft OneDrive
 
-**Prerequisites:**
-- Mega account with email and password
-
-**Required Python Libraries:**
 ```bash
-pip install --target <libs_folder> mega.py
+# 1. Start setup
+!cloudbackup setup onedrive
+
+# 2. Configure rclone
+rclone config
+# Choose: n) New remote
+# Name: onedrive-backup
+# Type: onedrive
+# Follow OAuth flow in browser
+
+# 3. Set remote name
+!cloudbackup field remote_name onedrive-backup
 ```
 
-**Setup Commands:**
+---
+
+### Dropbox
+
+```bash
+# 1. Start setup
+!cloudbackup setup dropbox
+
+# 2. Configure rclone
+rclone config
+# Choose: n) New remote
+# Name: dropbox-backup
+# Type: dropbox
+# Follow OAuth flow in browser
+
+# 3. Set remote name
+!cloudbackup field remote_name dropbox-backup
 ```
+
+---
+
+### Mega
+
+```bash
+# 1. Start setup
 !cloudbackup setup mega
-!cloudbackup field email your@email.com
-!cloudbackup field password YourPassword123
-```
 
-> ⚠️ Upload functionality not yet implemented. Setup will complete but uploads will show a placeholder message.
+# 2. Configure rclone
+rclone config
+# Choose: n) New remote
+# Name: mega-backup
+# Type: mega
+# Enter your Mega email and password
+
+# 3. Set remote name
+!cloudbackup field remote_name mega-backup
+```
 
 ---
 
-### Filen (Coming Soon)
+### Amazon S3 / MinIO / Backblaze
 
-**Prerequisites:**
-- Filen account with API token
-
-**Required Python Libraries:**
 ```bash
-pip install --target <libs_folder> filen-client
-```
+# 1. Start setup
+!cloudbackup setup s3
 
-**Setup Commands:**
-```
-!cloudbackup setup filen
-!cloudbackup field api_token your_api_token_here
-!cloudbackup field folder_id none
-```
+# 2. Configure rclone
+rclone config
+# Choose: n) New remote
+# Name: s3-backup
+# Type: s3
+# Enter access key, secret key, region, endpoint
 
-> ⚠️ Upload functionality not yet implemented. Setup will complete but uploads will show a placeholder message.
+# 3. Set remote name
+!cloudbackup field remote_name s3-backup
+```
 
 ---
 
@@ -297,34 +318,20 @@ Example location:
 ```
 
 This file contains:
-- `provider`: Selected provider name (`gdrive`, `mega`, or `filen`)
-- `settings`: Provider-specific configuration (credentials path, tokens, etc.)
+- `provider`: Selected provider name (e.g., `gdrive`, `onedrive`)
+- `remote_name`: Your rclone remote name
 
-**⚠️ Security Notice:** This file contains sensitive credentials. Do not share or commit it to version control!
+**Note:** Actual credentials are stored securely by rclone in its own configuration, not in this file.
 
 ---
 
-## ✅ Template System
+## ✅ How It Works
 
-Each provider has a configuration template stored in this repository:
-
-```
-/cloud-backup/templates/
-├── gdrive_template.json
-├── mega_template.json
-└── filen_template.json
-```
-
-Templates define:
-- Required fields
-- Field descriptions
-- Example values
-- Validation rules
-
-When you run `!cloudbackup setup <provider>`, the script automatically downloads the template from:
-```
-https://raw.githubusercontent.com/kalashnikxvxiii-collab/amscripts/main/cloud-backup/templates/<provider>_template.json
-```
+1. **rclone handles authentication**: OAuth, tokens, and API keys are managed by rclone
+2. **Universal configuration**: One template works for all 40+ providers
+3. **Secure storage**: Credentials stored in rclone's encrypted config file
+4. **Simple uploads**: Script uses `rclone copy` command to transfer backups
+5. **Provider flexibility**: Easy to switch providers or use multiple remotes
 
 ---
 
@@ -335,25 +342,27 @@ https://raw.githubusercontent.com/kalashnikxvxiii-collab/amscripts/main/cloud-ba
 - Verify the file is named `cloud_backup.ams` (not `.txt`)
 - Ensure AMscript is enabled in auto-mcs settings
 
-### Template download fails
+### rclone not found
+- Install rclone using the commands in the Installation section
+- Verify installation: open terminal and run `rclone version`
+- Reload the script after installing: `!ams reload`
+
+### Remote not found error
+- List your remotes: `rclone listremotes`
+- Verify you're using the exact remote name (case-sensitive)
+- Make sure you completed `rclone config` successfully
+- Test the remote: `rclone lsd <remote-name>:`
+
+### Upload fails or times out
 - Check your internet connection
-- Verify the GitHub repository URL is accessible
-- The script uses: `https://raw.githubusercontent.com/kalashnikxvxiii-collab/amscripts/main/cloud-backup/templates/`
+- Verify the remote is accessible: `rclone lsd <remote-name>:`
+- Large backups may take 10+ minutes (timeout is set to 10 minutes)
+- Check rclone logs for detailed error messages
 
-### "Missing Google Drive libraries" error
-- Install required libraries using the pip command shown in setup instructions
-- Make sure to use `--target` flag to install in the correct location
-- Restart auto-mcs after installing libraries
-
-### Credentials file not found (Google Drive)
-- Use the full absolute path to your JSON file
-- On Windows, use backslashes or forward slashes: `C:\path\to\file.json` or `C:/path/to/file.json`
-- Make sure the file exists and is readable
-
-### Setup state lost after restart
-- This is expected - setup state is temporary
-- Configuration is only saved after setup is finalized
-- If interrupted, restart setup with `!cloudbackup setup <provider>`
+### OAuth browser doesn't open during rclone config
+- Make sure you're running `rclone config` from a machine with a browser
+- For headless servers, use `rclone config` on your local machine, then copy the config file
+- rclone config location: `~/.config/rclone/rclone.conf` (Linux/Mac) or `%APPDATA%\rclone\rclone.conf` (Windows)
 
 ---
 
@@ -361,24 +370,20 @@ https://raw.githubusercontent.com/kalashnikxvxiii-collab/amscripts/main/cloud-ba
 
 **Completed:**
 - ✅ Core script architecture with amscript API
+- ✅ rclone integration for universal provider support
 - ✅ Interactive setup flow with validation
-- ✅ Template system with GitHub integration
-- ✅ Google Drive upload implementation
-- ✅ Help and progress tracking commands
-- ✅ Field validation and error handling
-
-**In Progress:**
-- 🚧 Mega upload implementation
-- 🚧 Filen upload implementation
+- ✅ Remote existence validation
+- ✅ Universal upload implementation (40+ providers)
+- ✅ Provider-specific setup instructions
+- ✅ rclone installation detection
 
 **Planned:**
 - ⏳ Automatic backup upload scheduling
 - ⏳ Backup retention policies
 - ⏳ Multiple backup destinations
-- ⏳ Encryption before upload
+- ⏳ Encryption before upload (via rclone crypt)
 - ⏳ Backup verification and integrity checks
-- ⏳ S3-compatible storage support (AWS, MinIO, Backblaze)
-- ⏳ Automatic Python dependency installation
+- ⏳ Progress bars during uploads
 
 ---
 
@@ -386,11 +391,11 @@ https://raw.githubusercontent.com/kalashnikxvxiii-collab/amscripts/main/cloud-ba
 
 Contributions are welcome! If you want to help:
 
-1. **Test the current implementation** and report bugs
-2. **Implement Mega upload** (`upload_to_mega()` function)
-3. **Implement Filen upload** (`upload_to_filen()` function)
-4. **Improve error handling** and user feedback
-5. **Add new cloud providers**
+1. **Test with different providers** and report compatibility issues
+2. **Improve error handling** and user feedback
+3. **Add automatic scheduling** for backup uploads
+4. **Implement retention policies** to manage old backups
+5. **Improve upload progress** feedback
 
 Please open an issue before starting major work to discuss the approach.
 

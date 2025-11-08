@@ -1,30 +1,37 @@
-server.log("DEBUG: cloud-backup.ams import starting")
- 
+server.log("DEBUG: cloud-backup.ams (rclone version) import starting")
+
 #!
 # title: Cloud Backup
 # author: kalashnikxvxiii
-# version: 0.2-pre
-# description: Upload server backups to selected cloud provider (Google Drive, Mega, Filen)
+# version: 0.3-pre
+# description: Upload server backups to cloud storage using rclone (supports 40+ providers!)
 #!
 
 import json
 import os
-import time
+import subprocess
 import urllib.request
-from threading import Thread
 
-SUPPORTED_PROVIDERS = ["gdrive", "mega", "filen"]
+# Supported providers (examples - rclone supports 40+ providers!)
+SUPPORTED_PROVIDERS = [
+    "gdrive",      # Google Drive
+    "onedrive",    # Microsoft OneDrive
+    "dropbox",     # Dropbox
+    "mega",        # Mega
+    "filen",       # Filen
+    "s3",          # Amazon S3 / MinIO / Backblaze
+    "azureblob",   # Azure Blob Storage
+    "box",         # Box
+    "pcloud",      # pCloud
+    # ... rclone supports many more!
+]
 
-# CONFIG_PATH will be set after server object is available in functions
-# Using server.directory to store config in the server folder
-CONFIG_PATH = None
-
-# IMPORTANT: correct raw GitHub URL
+# GitHub templates base URL
 GITHUB_TEMPLATES_BASE = "https://raw.githubusercontent.com/kalashnikxvxiii-collab/amscripts/main/cloud-backup/templates"
 
 
 # ---------------------------------------------------------
-# Basic config file load/save
+# Config file management
 # ---------------------------------------------------------
 def get_config_path():
     """Get the config file path in the server directory."""
@@ -34,13 +41,13 @@ def get_config_path():
 def load_config():
     config_path = get_config_path()
     if not os.path.exists(config_path):
-        return {"provider": None, "settings": {}}
+        return {"provider": None, "remote_name": None}
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except:
         server.log_error("Failed to read config, resetting.")
-        return {"provider": None, "settings": {}}
+        return {"provider": None, "remote_name": None}
 
 
 def save_config(cfg):
@@ -53,77 +60,158 @@ def save_config(cfg):
 
 
 # ---------------------------------------------------------
-# Dependency check for Google Drive
-# (libraries installed into .auto-mcs/Tools/amscript/libs)
+# rclone availability check
 # ---------------------------------------------------------
-def check_google_deps():
+def check_rclone_installed():
+    """Check if rclone is installed and available in PATH."""
     try:
-        import google.oauth2  # type: ignore
-        import googleapiclient  # type: ignore
-        return True
+        result = subprocess.run(
+            ["rclone", "version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return result.returncode == 0
     except:
         return False
 
 
 # ---------------------------------------------------------
-# Provider instructions (shown ONLY after provider chosen)
+# Provider setup instructions (rclone-based)
 # ---------------------------------------------------------
 def show_provider_instructions(provider):
+    """Show rclone setup instructions for the selected provider."""
     provider = provider.lower()
-    server.log_warning("=" * 60)
-    server.log_success(f"{provider.upper()} SETUP INSTRUCTIONS")
-    server.log_warning("=" * 60)
 
+    server.log_warning("=" * 70)
+    server.log_success(f"SETUP: {provider.upper()} with rclone")
+    server.log_warning("=" * 70)
+    server.log("")
+
+    # Check if rclone is installed
+    if not check_rclone_installed():
+        server.log_error("rclone is NOT installed!")
+        server.log("")
+        server.log("Please install rclone first:")
+        server.log("")
+        server.log("Windows:")
+        server.log("  Download from: https://rclone.org/downloads/")
+        server.log("  Or use: winget install Rclone.Rclone")
+        server.log("")
+        server.log("Linux:")
+        server.log("  curl https://rclone.org/install.sh | sudo bash")
+        server.log("")
+        server.log("macOS:")
+        server.log("  brew install rclone")
+        server.log("")
+        server.log("After installing, reload this script: !ams reload")
+        server.log_warning("=" * 70)
+        return
+
+    server.log_success("✓ rclone is installed!")
+    server.log("")
+    server.log("STEP 1: Configure rclone remote")
+    server.log("  Run this command in your terminal:")
+    server.log("")
+    server.log("    rclone config")
+    server.log("")
+    server.log("STEP 2: Follow the interactive setup")
+
+    # Provider-specific quick tips
     if provider == "gdrive":
-        server.log("You selected Google Drive.")
-        server.log("1) Go to Google Cloud Console")
-        server.log("2) Create a Service Account and enable Drive API")
-        server.log("3) Download the JSON credentials")
-        server.log("4) Upload the JSON file to the server")
-        server.log("During setup, fields will be requested.")
+        server.log("")
+        server.log("Google Drive tips:")
+        server.log("  - Choose: n) New remote")
+        server.log("  - Name: gdrive-backup (or your choice)")
+        server.log("  - Type: drive (Google Drive)")
+        server.log("  - Follow OAuth flow in browser")
+        server.log("  - Grant permissions when asked")
 
-        if not check_google_deps():
-            server.log_warning("Google Drive libraries not detected.")
-            server.log("Install them based on your OS:")
-            server.log("Windows:")
-            server.log('pip install --target "%appdata%\\.auto-mcs\\Tools\\amscript\\libs" google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib')
-            server.log("Linux:")
-            server.log("pip install --target ~/.auto-mcs/Tools/amscript/libs google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib")
-            server.log("macOS:")
-            server.log('pip install --target "~/Library/Application Support/auto-mcs/Tools/amscript/libs" google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib')
+    elif provider == "onedrive":
+        server.log("")
+        server.log("OneDrive tips:")
+        server.log("  - Choose: n) New remote")
+        server.log("  - Name: onedrive-backup (or your choice)")
+        server.log("  - Type: onedrive")
+        server.log("  - Follow OAuth flow in browser")
+
+    elif provider == "dropbox":
+        server.log("")
+        server.log("Dropbox tips:")
+        server.log("  - Choose: n) New remote")
+        server.log("  - Name: dropbox-backup (or your choice)")
+        server.log("  - Type: dropbox")
+        server.log("  - Follow OAuth flow in browser")
 
     elif provider == "mega":
-        server.log("You selected Mega.")
-        server.log("You will need email/password or a session token.")
-        server.log("If required, install:")
-        server.log("  pip install --target <libs> mega.py")
+        server.log("")
+        server.log("Mega tips:")
+        server.log("  - Choose: n) New remote")
+        server.log("  - Name: mega-backup (or your choice)")
+        server.log("  - Type: mega")
+        server.log("  - Enter your Mega email and password")
 
     elif provider == "filen":
-        server.log("You selected Filen.")
-        server.log("You will need an API token and optionally a folder ID.")
-        server.log("If required, install:")
-        server.log("  pip install --target <libs> <filen-client>")
+        server.log("")
+        server.log("Filen tips:")
+        server.log("  - Choose: n) New remote")
+        server.log("  - Name: filen-backup (or your choice)")
+        server.log("  - Type: filen")
+        server.log("  - Enter your API key")
 
-    server.log_warning("=" * 60)
+    elif provider == "s3":
+        server.log("")
+        server.log("S3 tips:")
+        server.log("  - Choose: n) New remote")
+        server.log("  - Name: s3-backup (or your choice)")
+        server.log("  - Type: s3")
+        server.log("  - Works with: AWS, MinIO, Backblaze, Wasabi, etc.")
+
+    server.log("")
+    server.log("STEP 3: Test your remote")
+    server.log("  Run: rclone lsd <your-remote-name>:")
+    server.log("")
+    server.log("STEP 4: Continue setup here")
+    server.log("  !cloudbackup field remote_name <your-remote-name>")
+    server.log("")
+    server.log("Example:")
+    server.log("  !cloudbackup field remote_name gdrive-backup")
+    server.log("")
+    server.log_warning("=" * 70)
 
 
 # ---------------------------------------------------------
-# Template Fetch
+# Template system
 # ---------------------------------------------------------
 def fetch_provider_template(provider):
+    """Download provider template (now simplified for rclone)."""
     provider = provider.lower()
-    url = f"{GITHUB_TEMPLATES_BASE}/{provider}_template.json"
-    # Save templates in server directory
-    local_path = os.path.join(server.directory, f"{provider}_template.json")
+    url = f"{GITHUB_TEMPLATES_BASE}/rclone_template.json"
+    local_path = os.path.join(server.directory, "rclone_template.json")
 
     try:
-        server.log(f"Downloading template for {provider}...")
+        server.log(f"Downloading rclone template...")
         urllib.request.urlretrieve(url, local_path)
-        server.log_success("Template downloaded successfully.")
+        server.log_success("Template downloaded.")
         return local_path
     except Exception as e:
         server.log_error(f"Failed to download template: {e}")
-        return None
+        # Fallback: create template locally
+        template = {
+            "fields": ["remote_name"],
+            "field_info": {
+                "remote_name": {
+                    "description": "Name of your rclone remote (created with 'rclone config')",
+                    "example": "gdrive-backup"
+                }
+            }
+        }
+        try:
+            with open(local_path, 'w') as f:
+                json.dump(template, f, indent=2)
+            return local_path
+        except:
+            return None
 
 
 # ---------------------------------------------------------
@@ -133,17 +221,25 @@ def start_setup():
     server.persistent['cloud_setup_state'] = {
         "stage": "choose_provider",
         "provider": None,
-        "template_file": None,
         "fields": []
     }
 
-    server.log_warning("=" * 60)
-    server.log("CLOUD BACKUP INITIAL SETUP")
-    server.log("Choose one provider using:")
-    server.log("   !cloudbackup setup gdrive")
-    server.log("   !cloudbackup setup mega")
-    server.log("   !cloudbackup setup filen")
-    server.log_warning("=" * 60)
+    server.log_warning("=" * 70)
+    server.log("CLOUD BACKUP SETUP")
+    server.log_warning("=" * 70)
+    server.log("")
+    server.log("This script uses rclone to upload backups.")
+    server.log("rclone supports 40+ cloud providers!")
+    server.log("")
+    server.log("Popular providers:")
+    server.log("  !cloudbackup setup gdrive     (Google Drive)")
+    server.log("  !cloudbackup setup onedrive   (Microsoft OneDrive)")
+    server.log("  !cloudbackup setup dropbox    (Dropbox)")
+    server.log("  !cloudbackup setup mega       (Mega)")
+    server.log("  !cloudbackup setup s3         (Amazon S3 / MinIO)")
+    server.log("")
+    server.log("Full list: https://rclone.org/")
+    server.log_warning("=" * 70)
 
 
 def continue_setup_with_provider(provider):
@@ -153,13 +249,9 @@ def continue_setup_with_provider(provider):
         return
 
     provider = provider.lower()
-    if provider not in SUPPORTED_PROVIDERS:
-        server.log_error(f"Unsupported provider: {provider}. Available: {', '.join(SUPPORTED_PROVIDERS)}")
-        return
-
     server.log(f"Provider selected: {provider}")
 
-    # Show provider instructions only now
+    # Show rclone setup instructions
     show_provider_instructions(provider)
 
     # Fetch template
@@ -177,35 +269,27 @@ def continue_setup_with_provider(provider):
 
     required_fields = list(template_data.get("fields", []))
     if not required_fields:
-        server.log_error("No fields listed in template - aborting.")
+        server.log_error("No fields in template.")
         return
 
     state['stage'] = "fill_fields"
     state['provider'] = provider
-    state['template_file'] = template_local
     state['fields'] = required_fields
     state['field_info'] = template_data.get("field_info", {})
     server.persistent['cloud_setup_state'] = state
 
-    server.log_success(f"{provider.upper()} requires setup of: {', '.join(required_fields)}")
     server.log("")
-
-    # Show field descriptions
+    server.log_success("Ready for field input:")
     field_info = state.get('field_info', {})
     for field in required_fields:
         info = field_info.get(field, {})
         if info:
-            server.log(f"  • {field}:")
-            if info.get('description'):
-                server.log(f"    {info['description']}")
-            if info.get('example'):
-                server.log(f"    Example: {info['example']}")
+            server.log(f"  • {field}: {info.get('description', '')}")
         else:
             server.log(f"  • {field}")
 
     server.log("")
-    server.log("Please enter values using:")
-    server.log("!cloudbackup field <name> <value>")
+    server.log("Set field with: !cloudbackup field <name> <value>")
 
 
 def fill_field(name, value):
@@ -216,205 +300,185 @@ def fill_field(name, value):
 
     if name not in state['fields']:
         server.log_error(f"Unknown field: {name}")
-        server.log(f"Expected fields: {', '.join(state['fields'])}")
+        server.log(f"Expected: {', '.join(state['fields'])}")
         return
 
-    # Validate field values
-    provider = state.get('provider', '')
-    if provider == 'gdrive' and name == 'credentials_file':
-        # Check if file exists
-        if not os.path.exists(value):
-            server.log_error(f"Credentials file not found: {value}")
-            server.log("Please provide the full path to your Google Service Account JSON file.")
+    # Validate remote_name exists in rclone
+    if name == "remote_name":
+        if not validate_rclone_remote(value):
+            server.log_error(f"rclone remote '{value}' not found!")
+            server.log("List your remotes with: rclone listremotes")
+            server.log("Create a remote with: rclone config")
             return
-        # Check if it's a JSON file
-        if not value.lower().endswith('.json'):
-            server.log_warning("Warning: File does not have .json extension. Make sure it's a valid JSON file.")
 
     state.setdefault("field_values", {})[name] = value
     server.log_success(f"✓ Set {name} = {value}")
 
-    # check progress
+    # Check progress
     pv = state.get("field_values", {})
     missing = [f for f in state['fields'] if f not in pv]
     if not missing:
-        server.log_success("All fields filled! Finalizing setup...")
+        server.log_success("All fields filled! Finalizing...")
         finalize_setup()
     else:
-        server.log(f"Still missing ({len(missing)}): {', '.join(missing)}")
-        # Show info for next missing field
-        field_info = state.get('field_info', {})
-        next_field = missing[0]
-        info = field_info.get(next_field, {})
-        if info:
-            server.log("")
-            server.log(f"Next field: {next_field}")
-            if info.get('description'):
-                server.log(f"  {info['description']}")
-            if info.get('example'):
-                server.log(f"  Example: {info['example']}")
-        server.log("")
-        server.log(f"Use: !cloudbackup field {next_field} <value>")
+        server.log(f"Still need: {', '.join(missing)}")
+
+
+def validate_rclone_remote(remote_name):
+    """Check if rclone remote exists."""
+    try:
+        result = subprocess.run(
+            ["rclone", "listremotes"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            remotes = [line.strip().rstrip(':') for line in result.stdout.strip().split('\n')]
+            return remote_name in remotes
+    except:
+        pass
+    return False
 
 
 def finalize_setup():
     state = server.persistent.get('cloud_setup_state')
     if not state:
-        server.log_error("No active setup to finalize.")
+        server.log_error("No active setup.")
         return
 
+    provider = state.get('provider')
+    values = state.get('field_values', {})
+
     config = load_config()
-    provider = state['provider']
     config['provider'] = provider
-    config['settings'] = state.get("field_values", {})
+    config['remote_name'] = values.get('remote_name')
 
     save_config(config)
-    server.log_success("Cloud backup setup completed.")
+    server.log_success("Setup complete!")
+    server.log(f"Provider: {provider}")
+    server.log(f"Remote: {values.get('remote_name')}")
+    server.log("")
+    server.log("Test with: !cloudbackup backup")
+
     del server.persistent['cloud_setup_state']
 
 
 # ---------------------------------------------------------
-# Backup Upload (placeholder)
+# Backup upload (universal with rclone!)
 # ---------------------------------------------------------
 def upload_backup():
     config = load_config()
-    if not config.get("provider"):
-        server.log_error("Backup provider not configured. Run !cloudbackup setup.")
+    remote_name = config.get("remote_name")
+
+    if not remote_name:
+        server.log_error("Not configured. Run: !cloudbackup setup")
         return
 
-    provider = config['provider']
-    if provider == "gdrive":
-        if not check_google_deps():
-            server.log_error("Missing Google Drive libraries. See setup instructions.")
-            return
+    if not check_rclone_installed():
+        server.log_error("rclone is not installed!")
+        return
 
-        server.log_success("Pretending to upload to Google Drive (logic coming next).")
+    # Get latest backup
+    latest = backup.latest
+    if not latest:
+        server.log_warning("No backup available to upload.")
+        return
 
-    elif provider == "mega":
-        server.log_success("Pretending to upload to Mega (logic coming next).")
+    backup_path = latest.path
+    backup_filename = os.path.basename(backup_path)
 
-    elif provider == "filen":
-        server.log_success("Pretending to upload to Filen (logic coming next).")
+    # rclone destination path
+    remote_path = f"{remote_name}:minecraft-backups/{server.name}/"
 
-    else:
-        server.log_error(f"Unknown provider: {provider}")
+    server.log(f"Uploading: {backup_filename}")
+    server.log(f"To: {remote_path}")
+    server.log("This may take a while...")
+
+    try:
+        # Run rclone copy
+        result = subprocess.run(
+            ["rclone", "copy", backup_path, remote_path, "-P"],
+            capture_output=True,
+            text=True,
+            timeout=600  # 10 minute timeout
+        )
+
+        if result.returncode == 0:
+            server.log_success(f"✓ Upload complete: {backup_filename}")
+            return True
+        else:
+            server.log_error("Upload failed!")
+            if result.stderr:
+                server.log_error(result.stderr[:500])  # First 500 chars
+            return False
+
+    except subprocess.TimeoutExpired:
+        server.log_error("Upload timed out (>10 minutes)")
+        return False
+    except Exception as e:
+        server.log_error(f"Upload error: {str(e)}")
+        return False
 
 
 # ---------------------------------------------------------
-# Command Handler
+# Command handler
 # ---------------------------------------------------------
-@player.on_alias(player, command='cloudbackup', arguments={'action': False, 'arg1': False, 'arg2': False, 'arg3': False, 'arg4': False, 'arg5': False}, permission='op', description='Manage cloud backups'):
-    """
-    Handle cloudbackup commands
-    Usage: !cloudbackup <action> [args...]
-    """
+@player.on_alias(player, command='cloudbackup', arguments={'action': False, 'arg1': False, 'arg2': False}, permission='op', description='Manage cloud backups'):
     if not arguments or not arguments.get('action'):
         player.log("Usage: !cloudbackup <action> [args...]")
-        player.log("Use !cloudbackup help for available commands.")
+        player.log("Commands: setup, field, status, backup, help")
         return
 
     action = arguments['action'].lower()
 
     if action == "setup":
-        # !cloudbackup setup [provider]
         if arguments.get('arg1'):
             continue_setup_with_provider(arguments['arg1'])
         else:
             start_setup()
-        return
 
     elif action == "field":
-        # !cloudbackup field <name> <value...>
         if not arguments.get('arg1') or not arguments.get('arg2'):
             player.log("Usage: !cloudbackup field <name> <value>")
             return
-        # Combine all args from arg2 onwards to support values with spaces
-        value_parts = [arguments['arg2']]
-        for i in range(3, 6):  # arg3, arg4, arg5
-            arg_key = f'arg{i}'
-            if arguments.get(arg_key):
-                value_parts.append(arguments[arg_key])
-        value = " ".join(value_parts)
-        fill_field(arguments['arg1'], value)
-        return
+        fill_field(arguments['arg1'], arguments['arg2'])
 
     elif action == "status":
         cfg = load_config()
-        player.log(f"Provider: {cfg.get('provider')}")
-        player.log(f"Settings: {cfg.get('settings')}")
-        return
+        player.log("=== Cloud Backup Status ===")
+        player.log(f"Provider: {cfg.get('provider', 'Not set')}")
+        player.log(f"Remote: {cfg.get('remote_name', 'Not set')}")
+        player.log(f"rclone: {'Installed ✓' if check_rclone_installed() else 'Not found ✗'}")
 
     elif action == "backup":
+        player.log("Starting backup upload...")
         upload_backup()
-        return
-
-    elif action == "progress":
-        # Show setup progress
-        state = server.persistent.get('cloud_setup_state')
-        if not state or state.get('stage') != 'fill_fields':
-            player.log("No active setup in progress.")
-            return
-
-        pv = state.get("field_values", {})
-        fields = state.get('fields', [])
-        filled = [f for f in fields if f in pv]
-        missing = [f for f in fields if f not in pv]
-
-        player.log_success(f"Setup Progress: {len(filled)}/{len(fields)} fields completed")
-        if filled:
-            player.log(f"Completed: {', '.join(filled)}")
-        if missing:
-            player.log(f"Missing: {', '.join(missing)}")
-        return
 
     elif action == "help":
-        # Show help for a specific field or general help
-        field_name = arguments.get('arg1')
-        if not field_name:
-            player.log("Cloud Backup Commands:")
-            player.log("  !cloudbackup setup [provider]  - Start setup (providers: gdrive, mega, filen)")
-            player.log("  !cloudbackup field <name> <value>  - Set a configuration field")
-            player.log("  !cloudbackup progress  - Show setup progress")
-            player.log("  !cloudbackup status  - Show current configuration")
-            player.log("  !cloudbackup backup  - Force an immediate backup upload")
-            player.log("  !cloudbackup help [field]  - Show help for a field")
-        else:
-            # Show help for specific field
-            state = server.persistent.get('cloud_setup_state')
-            if not state:
-                player.log_error("No active setup. Start with: !cloudbackup setup")
-                return
-
-            field_info = state.get('field_info', {})
-            info = field_info.get(field_name, {})
-            if info:
-                player.log(f"Field: {field_name}")
-                if info.get('description'):
-                    player.log(f"  {info['description']}")
-                if info.get('example'):
-                    player.log(f"  Example: {info['example']}")
-            else:
-                player.log(f"No help available for field: {field_name}")
-        return
+        player.log("Cloud Backup Commands:")
+        player.log("  !cloudbackup setup <provider>  - Start setup")
+        player.log("  !cloudbackup field <name> <value>  - Set field")
+        player.log("  !cloudbackup status  - Show configuration")
+        player.log("  !cloudbackup backup  - Upload latest backup")
+        player.log("")
+        player.log("Supported providers: gdrive, onedrive, dropbox, mega, s3, ...")
+        player.log("Full list: https://rclone.org/")
 
     else:
-        player.log_error("Unknown action.")
-        player.log("Use !cloudbackup help for available commands.")
+        player.log_error("Unknown action. Use: !cloudbackup help")
 
 
 # ---------------------------------------------------------
-# Startup behavior
+# Startup
 # ---------------------------------------------------------
-
 @server.on_start(data):
-    """
-    On server start: check if cloud backup is configured and show status.
-    """
     cfg = load_config()
-    if not cfg.get("provider"):
-        server.log_warning("=" * 60)
+    if not cfg.get('remote_name'):
+        server.log_warning("=" * 70)
         server.log_warning("Cloud Backup not configured.")
-        server.log("Run: !cloudbackup setup")
-        server.log_warning("=" * 60)
+        server.log("Run: !cloudbackup setup <provider>")
+        server.log_warning("=" * 70)
     else:
-        server.log(f"Cloud Backup ready (provider: {cfg.get('provider')})")
+        rclone_ok = check_rclone_installed()
+        server.log(f"Cloud Backup ready ({cfg.get('provider')}) {'✓' if rclone_ok else '✗ rclone missing'}")

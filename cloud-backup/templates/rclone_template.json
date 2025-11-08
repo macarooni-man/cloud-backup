@@ -1,0 +1,10 @@
+{
+  "fields": ["remote_name"],
+  "field_info": {
+    "remote_name": {
+      "description": "Name of your rclone remote (created with 'rclone config')",
+      "example": "gdrive-backup",
+      "help": "List your remotes with: rclone listremotes"
+    }
+  }
+}
