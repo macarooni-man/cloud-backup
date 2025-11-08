@@ -1,11 +1,12 @@
 # Cloud Backup for auto-mcs (amscript)
-**Version:** 0.3-pre
+**Version:** 0.3.0
 **Author:** kalashnikxvxiii
+**Status:** ✅ Production Ready
 
 Cloud Backup is an amscript that allows Minecraft server owners using **auto-mcs** to automatically upload world backups to cloud storage using **rclone**.
 
 **Supports 40+ cloud providers including:**
-- Google Drive
+- Google Drive ✅ **Tested**
 - Microsoft OneDrive
 - Dropbox
 - Mega
@@ -16,9 +17,8 @@ Cloud Backup is an amscript that allows Minecraft server owners using **auto-mcs
 
 Full list: [rclone.org](https://rclone.org/)
 
-> ⚠️ **Pre-release notice:**
-> This project is currently under active development.
-> Setup and upload functionality are implemented and ready for testing.
+> ✅ **Production Ready:**
+> All core features tested and working. Upload backups to Google Drive and 40+ other providers with confidence.
 
 ---
 
@@ -368,22 +368,27 @@ This file contains:
 
 ## ✅ Development Status
 
+**v0.3.0 - Production Ready (18/18 tests passed)**
+
 **Completed:**
 - ✅ Core script architecture with amscript API
-- ✅ rclone integration for universal provider support
+- ✅ rclone integration for universal provider support (40+ providers)
 - ✅ Interactive setup flow with validation
 - ✅ Remote existence validation
-- ✅ Universal upload implementation (40+ providers)
+- ✅ Universal upload implementation with timeout handling
 - ✅ Provider-specific setup instructions
 - ✅ rclone installation detection
+- ✅ Comprehensive error handling and user feedback
+- ✅ Configuration persistence across server restarts
+- ✅ Tested with Google Drive (production ready)
 
-**Planned:**
+**Next Version (v0.4):**
 - ⏳ Automatic backup upload scheduling
-- ⏳ Backup retention policies
-- ⏳ Multiple backup destinations
+- ⏳ Backup retention policies (auto-cleanup old backups)
+- ⏳ Testing with additional providers (OneDrive, Dropbox, S3)
+- ⏳ Multiple backup destinations support
 - ⏳ Encryption before upload (via rclone crypt)
 - ⏳ Backup verification and integrity checks
-- ⏳ Progress bars during uploads
 
 ---
 

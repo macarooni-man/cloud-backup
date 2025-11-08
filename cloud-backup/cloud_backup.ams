@@ -3,7 +3,7 @@ server.log("DEBUG: cloud-backup.ams (rclone version) import starting")
 #!
 # title: Cloud Backup
 # author: kalashnikxvxiii
-# version: 0.3-pre
+# version: 0.3.0
 # description: Upload server backups to cloud storage using rclone (supports 40+ providers!)
 #!
 
