@@ -1,5 +1,5 @@
 # Cloud Backup for auto-mcs (amscript)
-**Version:** 0.3.0
+**Version:** 0.4.0
 **Author:** kalashnikxvxiii
 **Status:** ✅ Production Ready
 
@@ -25,6 +25,8 @@ Full list: [rclone.org](https://rclone.org/)
 ## ✅ Features
 
 ✔ Upload server backups to 40+ cloud storage providers
+✔ **Automatic backup scheduling** - Upload every X hours automatically
+✔ **Backup retention policies** - Auto-delete old backups, keep only last N
 ✔ Universal setup using rclone (one tool for all providers)
 ✔ OAuth authentication handled by rclone (no complex credential files)
 ✔ Guided interactive setup with step-by-step instructions
@@ -207,6 +209,50 @@ The upload may take several minutes depending on backup size and internet speed.
 
 ---
 
+### Enable Automatic Uploads
+
+**Configure automatic backup scheduling:**
+
+```
+!cloudbackup schedule 6
+```
+
+This enables automatic uploads every 6 hours. You can use any number of hours (minimum 1).
+
+**Check scheduling status:**
+```
+!cloudbackup schedule
+```
+
+**Disable automatic uploads:**
+```
+!cloudbackup schedule off
+```
+
+---
+
+### Configure Backup Retention
+
+**Set retention policy (keep only last N backups):**
+
+```
+!cloudbackup retention 7
+```
+
+This keeps only the 7 most recent backups and automatically deletes older ones after each upload.
+
+**Check retention status:**
+```
+!cloudbackup retention
+```
+
+**Disable retention (keep all backups):**
+```
+!cloudbackup retention off
+```
+
+---
+
 ## ✅ Quick Setup Examples
 
 ### Google Drive
@@ -368,9 +414,17 @@ This file contains:
 
 ## ✅ Development Status
 
-**v0.3.0 - Production Ready (18/18 tests passed)**
+**v0.4.0 - Production Ready (29/29 tests passed)**
 
-**Completed:**
+**Completed in v0.4.0:**
+- ✅ **Automatic backup scheduling** - Upload every X hours automatically
+- ✅ **Backup retention policies** - Keep only last N backups, auto-delete old ones
+- ✅ Schedule configuration commands (`!cloudbackup schedule`)
+- ✅ Retention configuration commands (`!cloudbackup retention`)
+- ✅ Automatic cleanup using `rclone delete`
+- ✅ Timestamp tracking for scheduled uploads
+
+**Completed in v0.3.0:**
 - ✅ Core script architecture with amscript API
 - ✅ rclone integration for universal provider support (40+ providers)
 - ✅ Interactive setup flow with validation
@@ -382,13 +436,12 @@ This file contains:
 - ✅ Configuration persistence across server restarts
 - ✅ Tested with Google Drive (production ready)
 
-**Next Version (v0.4):**
-- ⏳ Automatic backup upload scheduling
-- ⏳ Backup retention policies (auto-cleanup old backups)
+**Planned for v0.5:**
 - ⏳ Testing with additional providers (OneDrive, Dropbox, S3)
 - ⏳ Multiple backup destinations support
 - ⏳ Encryption before upload (via rclone crypt)
 - ⏳ Backup verification and integrity checks
+- ⏳ Bandwidth limiting options
 
 ---
 

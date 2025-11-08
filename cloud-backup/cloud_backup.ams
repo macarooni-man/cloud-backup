@@ -3,13 +3,14 @@ server.log("DEBUG: cloud-backup.ams (rclone version) import starting")
 #!
 # title: Cloud Backup
 # author: kalashnikxvxiii
-# version: 0.3.0
+# version: 0.4.0
 # description: Upload server backups to cloud storage using rclone (supports 40+ providers!)
 #!
 
 import json
 import os
 import subprocess
+import time
 import urllib.request
 
 # Supported providers (examples - rclone supports 40+ providers!)
@@ -39,15 +40,34 @@ def get_config_path():
 
 
 def load_config():
+    """Load configuration with defaults for new fields."""
     config_path = get_config_path()
+
+    # Default configuration
+    default_config = {
+        "provider": None,
+        "remote_name": None,
+        "auto_upload_enabled": False,
+        "upload_interval_hours": 6,
+        "retention_count": 0  # 0 = keep all backups (no auto-delete)
+    }
+
     if not os.path.exists(config_path):
-        return {"provider": None, "remote_name": None}
+        return default_config.copy()
+
     try:
         with open(config_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            loaded = json.load(f)
+
+        # Merge with defaults (preserves new fields in old configs)
+        for key, value in default_config.items():
+            if key not in loaded:
+                loaded[key] = value
+
+        return loaded
     except:
         server.log_error("Failed to read config, resetting.")
-        return {"provider": None, "remote_name": None}
+        return default_config.copy()
 
 
 def save_config(cfg):
@@ -406,6 +426,15 @@ def upload_backup():
 
         if result.returncode == 0:
             server.log_success(f"✓ Upload complete: {backup_filename}")
+
+            # Update last upload time
+            server.persistent['cloud_last_upload_time'] = time.time()
+
+            # Apply retention policy if configured
+            retention_count = config.get("retention_count", 0)
+            if retention_count > 0:
+                cleanup_old_backups(remote_name, retention_count)
+
             return True
         else:
             server.log_error("Upload failed!")
@@ -422,12 +451,88 @@ def upload_backup():
 
 
 # ---------------------------------------------------------
+# Backup retention / cleanup
+# ---------------------------------------------------------
+def get_cloud_backups(remote_name):
+    """List all backup files in the cloud, sorted by modification time (oldest first)."""
+    try:
+        remote_path = f"{remote_name}:minecraft-backups/{server.name}/"
+
+        # Use rclone lsf to list files with modification time
+        result = subprocess.run(
+            ["rclone", "lsf", remote_path, "--format", "tp"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode != 0:
+            return []
+
+        # Parse output: each line is "time;path"
+        backups = []
+        for line in result.stdout.strip().split('\n'):
+            if line:
+                parts = line.split(';', 1)
+                if len(parts) == 2:
+                    backups.append({
+                        'time': parts[0],
+                        'filename': parts[1]
+                    })
+
+        # Sort by time (oldest first)
+        backups.sort(key=lambda x: x['time'])
+        return backups
+
+    except Exception as e:
+        server.log_error(f"Failed to list cloud backups: {str(e)}")
+        return []
+
+
+def cleanup_old_backups(remote_name, retention_count):
+    """Delete old backups if count exceeds retention limit."""
+    if retention_count <= 0:
+        return  # No cleanup if retention is 0 or negative
+
+    backups = get_cloud_backups(remote_name)
+
+    if len(backups) <= retention_count:
+        return  # Nothing to delete
+
+    # Calculate how many to delete
+    to_delete_count = len(backups) - retention_count
+    to_delete = backups[:to_delete_count]  # Oldest files
+
+    server.log(f"Cleaning up {to_delete_count} old backup(s)...")
+
+    remote_path = f"{remote_name}:minecraft-backups/{server.name}/"
+
+    for backup in to_delete:
+        filename = backup['filename']
+        try:
+            result = subprocess.run(
+                ["rclone", "delete", f"{remote_path}{filename}"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                server.log(f"  Deleted: {filename}")
+            else:
+                server.log_warning(f"  Failed to delete: {filename}")
+
+        except Exception as e:
+            server.log_error(f"  Error deleting {filename}: {str(e)}")
+
+
+# ---------------------------------------------------------
 # Command handler
 # ---------------------------------------------------------
 @player.on_alias(player, command='cloudbackup', arguments={'action': False, 'arg1': False, 'arg2': False}, permission='op', description='Manage cloud backups'):
     if not arguments or not arguments.get('action'):
         player.log("Usage: !cloudbackup <action> [args...]")
-        player.log("Commands: setup, field, status, backup, help")
+        player.log("Commands: setup, field, status, backup, schedule, retention, help")
         return
 
     action = arguments['action'].lower()
@@ -451,16 +556,101 @@ def upload_backup():
         player.log(f"Remote: {cfg.get('remote_name', 'Not set')}")
         player.log(f"rclone: {'Installed ✓' if check_rclone_installed() else 'Not found ✗'}")
 
+        # Show schedule status
+        if cfg.get('auto_upload_enabled'):
+            player.log(f"Auto-upload: ENABLED (every {cfg.get('upload_interval_hours', 6)} hours)")
+        else:
+            player.log("Auto-upload: DISABLED")
+
+        # Show retention status
+        retention = cfg.get('retention_count', 0)
+        if retention > 0:
+            player.log(f"Retention: Keep last {retention} backup(s)")
+        else:
+            player.log("Retention: DISABLED (keeps all)")
+
     elif action == "backup":
         player.log("Starting backup upload...")
         upload_backup()
 
+    elif action == "schedule":
+        cfg = load_config()
+        arg1 = arguments.get('arg1')
+
+        if not arg1:
+            # Show current schedule
+            if cfg.get('auto_upload_enabled'):
+                player.log(f"Auto-upload: ENABLED (every {cfg.get('upload_interval_hours', 6)} hours)")
+            else:
+                player.log("Auto-upload: DISABLED")
+            player.log("")
+            player.log("Usage:")
+            player.log("  !cloudbackup schedule <hours>  - Enable auto-upload every X hours")
+            player.log("  !cloudbackup schedule off      - Disable auto-upload")
+            return
+
+        if arg1.lower() == "off":
+            cfg['auto_upload_enabled'] = False
+            save_config(cfg)
+            player.log_success("Auto-upload disabled")
+        else:
+            try:
+                hours = int(arg1)
+                if hours < 1:
+                    player.log_error("Hours must be at least 1")
+                    return
+                cfg['auto_upload_enabled'] = True
+                cfg['upload_interval_hours'] = hours
+                save_config(cfg)
+                player.log_success(f"Auto-upload enabled: every {hours} hour(s)")
+                player.log("Backups will be uploaded automatically.")
+            except ValueError:
+                player.log_error("Invalid value. Use a number or 'off'")
+
+    elif action == "retention":
+        cfg = load_config()
+        arg1 = arguments.get('arg1')
+
+        if not arg1:
+            # Show current retention
+            retention = cfg.get('retention_count', 0)
+            if retention > 0:
+                player.log(f"Retention: Keep last {retention} backup(s)")
+            else:
+                player.log("Retention: DISABLED (keeps all backups)")
+            player.log("")
+            player.log("Usage:")
+            player.log("  !cloudbackup retention <number>  - Keep only last N backups")
+            player.log("  !cloudbackup retention off       - Keep all backups")
+            return
+
+        if arg1.lower() == "off":
+            cfg['retention_count'] = 0
+            save_config(cfg)
+            player.log_success("Retention disabled - all backups will be kept")
+        else:
+            try:
+                count = int(arg1)
+                if count < 1:
+                    player.log_error("Count must be at least 1")
+                    return
+                cfg['retention_count'] = count
+                save_config(cfg)
+                player.log_success(f"Retention set: keep last {count} backup(s)")
+                player.log("Older backups will be deleted automatically after upload.")
+            except ValueError:
+                player.log_error("Invalid value. Use a number or 'off'")
+
     elif action == "help":
         player.log("Cloud Backup Commands:")
-        player.log("  !cloudbackup setup <provider>  - Start setup")
-        player.log("  !cloudbackup field <name> <value>  - Set field")
-        player.log("  !cloudbackup status  - Show configuration")
-        player.log("  !cloudbackup backup  - Upload latest backup")
+        player.log("  !cloudbackup setup <provider>     - Start setup")
+        player.log("  !cloudbackup field <name> <value> - Set field")
+        player.log("  !cloudbackup status               - Show configuration")
+        player.log("  !cloudbackup backup               - Upload latest backup")
+        player.log("  !cloudbackup schedule <hours>     - Enable auto-upload")
+        player.log("  !cloudbackup schedule off         - Disable auto-upload")
+        player.log("  !cloudbackup retention <number>   - Keep last N backups")
+        player.log("  !cloudbackup retention off        - Keep all backups")
         player.log("")
         player.log("Supported providers: gdrive, onedrive, dropbox, mega, s3, ...")
         player.log("Full list: https://rclone.org/")
@@ -481,4 +671,46 @@ def upload_backup():
         server.log_warning("=" * 70)
     else:
         rclone_ok = check_rclone_installed()
-        server.log(f"Cloud Backup ready ({cfg.get('provider')}) {'✓' if rclone_ok else '✗ rclone missing'}")
+        status = '✓' if rclone_ok else '✗ rclone missing'
+        server.log(f"Cloud Backup ready ({cfg.get('provider')}) {status}")
+
+        # Show auto-upload status
+        if cfg.get('auto_upload_enabled'):
+            server.log(f"  Auto-upload: ENABLED (every {cfg.get('upload_interval_hours', 6)} hours)")
+
+
+# ---------------------------------------------------------
+# Automatic backup scheduling
+# ---------------------------------------------------------
+@server.on_loop(interval=1, unit='hour'):
+    cfg = load_config()
+
+    # Check if auto-upload is enabled
+    if not cfg.get('auto_upload_enabled'):
+        return
+
+    # Check if configured
+    if not cfg.get('remote_name'):
+        return
+
+    # Check if rclone is available
+    if not check_rclone_installed():
+        return
+
+    # Get interval in hours
+    interval_hours = cfg.get('upload_interval_hours', 6)
+
+    # Get last upload time from persistent storage
+    last_upload = server.persistent.get('cloud_last_upload_time', 0)
+
+    # Calculate hours since last upload
+    current_time = time.time()
+    hours_since_last = (current_time - last_upload) / 3600
+
+    # Check if it's time to upload
+    if hours_since_last >= interval_hours:
+        server.log("Automatic backup upload triggered...")
+        success = upload_backup()
+
+        if success:
+            server.persistent['cloud_last_upload_time'] = current_time

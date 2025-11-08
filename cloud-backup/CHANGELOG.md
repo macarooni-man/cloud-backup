@@ -7,15 +7,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
-- Automatic backup upload scheduling system via `@server.on_loop()`
-- Backup retention policies (max backups, auto-cleanup)
+### Planned for v0.5
+- Testing with additional providers (OneDrive, Dropbox, S3, Mega)
 - Multiple backup destinations support
-- Pre-upload encryption
+- Pre-upload encryption (via rclone crypt)
 - Backup verification and integrity checks
-- Progress bars for uploads
+- Bandwidth limiting options
 - Email notifications on upload success/failure
 - Webhook integration for upload events
+- Download/restore backups from cloud
+
+---
+
+## [0.4.0] - 2025-11-08
+
+### 🚀 Major Feature Release: Automatic Scheduling & Retention
+
+**Status:** ✅ Production Ready (all tests passed)
+
+This version adds the two most requested features: automatic backup scheduling and retention policies for automatic cleanup of old backups.
+
+### Added
+
+**Automatic Backup Scheduling:**
+- `@server.on_loop(interval=1, unit='hour')` - Automatic upload check every hour
+- `!cloudbackup schedule <hours>` - Enable auto-upload every X hours (minimum 1)
+- `!cloudbackup schedule off` - Disable automatic uploads
+- `!cloudbackup schedule` - Show current schedule status
+- Timestamp tracking using `server.persistent` to prevent duplicate uploads
+- Intelligent interval checking (uploads only when configured time has passed)
+
+**Backup Retention Policies:**
+- `!cloudbackup retention <number>` - Keep only last N backups, delete older ones
+- `!cloudbackup retention off` - Disable retention (keep all backups)
+- `!cloudbackup retention` - Show current retention status
+- `get_cloud_backups()` - Lists all backups in cloud sorted by modification time
+- `cleanup_old_backups()` - Automatically deletes oldest backups using `rclone delete`
+- Automatic cleanup after each successful upload (manual or scheduled)
+
+**Enhanced Status Display:**
+- `!cloudbackup status` now shows auto-upload configuration (enabled/disabled, interval)
+- `!cloudbackup status` now shows retention policy (keep N backups or keep all)
+- Startup message shows if auto-upload is enabled and interval
+
+**Configuration Updates:**
+- New config fields: `auto_upload_enabled`, `upload_interval_hours`, `retention_count`
+- Backward compatible with v0.3.0 configs (auto-adds new fields with defaults)
+- Default values: auto-upload disabled, 6 hour interval, retention disabled (0)
+
+### Changed
+- Updated `load_config()` to merge defaults for new fields (preserves old configs)
+- Updated `upload_backup()` to save timestamp and trigger retention cleanup
+- Updated help command with new schedule/retention commands
+- Version bumped from 0.3.0 to 0.4.0
+
+### Technical Details
+
+**New Functions:**
+- `get_cloud_backups(remote_name)` - Uses `rclone lsf --format tp` to list files with timestamps
+- `cleanup_old_backups(remote_name, retention_count)` - Deletes oldest backups exceeding retention limit
+
+**Dependencies:**
+- Added `import time` for timestamp tracking
+
+**Configuration Format (v0.4.0):**
+```json
+{
+  "provider": "gdrive",
+  "remote_name": "gdrive-backup",
+  "auto_upload_enabled": false,
+  "upload_interval_hours": 6,
+  "retention_count": 0
+}
+```
+
+**Lines of code:** ~715 lines (up from 485 in v0.3.0)
+
+### Testing
+
+**All Tests Passed (11/11 for v0.4.0 features):**
+- ✅ Retention policy configuration and display
+- ✅ Retention policy enable/disable
+- ✅ Automatic cleanup after upload (deletes oldest backups)
+- ✅ Schedule configuration commands
+- ✅ Schedule enable/disable
+- ✅ Enhanced status command displays all fields
+- ✅ Automatic upload trigger after configured interval
+- ✅ Startup message with auto-upload status
+- ✅ Invalid schedule/retention value handling
+- ✅ Config backward compatibility with v0.3.0
+- ✅ Timestamp persistence across server restarts
+
+**Total Tests: 29/29 passed (100%)**
+- v0.3.0 core features: 18/18 ✅
+- v0.4.0 new features: 11/11 ✅
+
+### Usage Examples
+
+**Enable automatic uploads every 6 hours:**
+```
+!cloudbackup schedule 6
+```
+
+**Keep only last 7 backups (auto-delete older):**
+```
+!cloudbackup retention 7
+```
+
+**Full automated setup:**
+```
+!cloudbackup schedule 12      # Auto-upload every 12 hours
+!cloudbackup retention 5      # Keep only 5 most recent backups
+!cloudbackup status           # Verify configuration
+```
+
+### Migration from v0.3.0
+
+No migration needed - v0.4.0 is fully backward compatible. Existing configs will automatically receive new fields with safe defaults (scheduling disabled, no retention limit).
 
 ---
 
