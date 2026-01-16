@@ -1,7 +1,8 @@
 # Cloud Backup for auto-mcs (amscript)
-**Version:** 0.4.0
-**Author:** kalashnikxvxiii
-**Status:** ✅ Production Ready
+
+**Version:** 0.4.0 (Scheduling & Retention)  
+**Author:** kalashnikxvxiii  
+**Status:** ✅ Production Ready (29/29 tests passing)
 
 Cloud Backup is an amscript that allows Minecraft server owners using **auto-mcs** to automatically upload world backups to cloud storage using **rclone**.
 

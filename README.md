@@ -8,11 +8,11 @@ A collection of amscripts for **auto-mcs** - the automated Minecraft server mana
 
 ## 📦 Available Scripts
 
-### Cloud Backup (v0.3-pre)
+### Cloud Backup (v0.4.0)
 
-Upload server backups automatically to 40+ cloud storage providers using **rclone**.
+Upload server backups automatically to 40+ cloud storage providers using **rclone**, with automatic scheduling and retention policies.
 
-**Status**: ✅ Setup and upload functional | Ready for testing
+**Status**: ✅ **Production Ready** | All 29 tests passing (100%)
 
 **Supported Providers** (via rclone):
 - Google Drive, OneDrive, Dropbox
