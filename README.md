@@ -222,7 +222,6 @@ See [LICENSE](LICENSE) file for full details.
 
 - **auto-mcs** by Kaleb Efflandt
 - **Scripts** by kalashnikxvxiii
-- **Development assistance** by Claude (Anthropic)
 
 ---
 
