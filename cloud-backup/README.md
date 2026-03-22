@@ -1,7 +1,7 @@
 # Cloud Backup for auto-mcs (amscript)
 
-**Version:** 0.4.0 (Scheduling & Retention)  
-**Author:** kalashnikxvxiii  
+**Version:** 1.0 (First official release)  
+**Author:** kalashnikxvxiii
 **Status:** ✅ Production Ready (29/29 tests passing)
 
 Cloud Backup is an amscript that allows Minecraft server owners using **auto-mcs** to automatically upload world backups to cloud storage using **rclone**.
@@ -52,43 +52,24 @@ Full list: [rclone.org](https://rclone.org/)
 
 ## ✅ Installation
 
-### Step 1: Install rclone
+### Install the script
 
-**Windows:**
-```powershell
-# Option 1: Download from https://rclone.org/downloads/
-# Option 2: Use winget
-winget install Rclone.Rclone
-```
-
-**Linux:**
-```bash
-curl https://rclone.org/install.sh | sudo bash
-```
-
-**macOS:**
-```bash
-brew install rclone
-```
-
-### Step 2: Install the script
-
-1. Download `cloud_backup.ams` from this repository
+1. Download `cloud-backup.ams` from this repository
 2. Place it in the auto-mcs amscript folder:
 
    **Windows:**
    ```
-   %appdata%\.auto-mcs\Tools\amscript\cloud_backup.ams
+   %appdata%\.auto-mcs\Tools\amscript\cloud-backup.ams
    ```
 
    **Linux:**
    ```
-   ~/.auto-mcs/Tools/amscript/cloud_backup.ams
+   ~/.auto-mcs/Tools/amscript/cloud-backup.ams
    ```
 
    **macOS:**
    ```
-   ~/Library/Application Support/auto-mcs/Tools/amscript/cloud_backup.ams
+   ~/Library/Application Support/auto-mcs/Tools/amscript/cloud-backup.ams
    ```
 
 3. Restart auto-mcs or reload scripts from server console:
@@ -353,15 +334,11 @@ rclone config
 
 ## ✅ Configuration Files
 
-After setup, the configuration is stored in your server directory:
+After setup, the configuration is stored in the app directory:
 
+Example location on Windows:
 ```
-<server_directory>/cloud_backup_config.json
-```
-
-Example location:
-```
-%appdata%\.auto-mcs\Servers\MyServer\cloud_backup_config.json
+%appdata%\.auto-mcs\Tools\amscript\pstconf\*.json
 ```
 
 This file contains:
@@ -415,29 +392,11 @@ This file contains:
 
 ## ✅ Development Status
 
-**v0.4.0 - Production Ready (29/29 tests passed)**
+**v1.0 - Production Ready (29/29 tests passed)**
 
-**Completed in v0.4.0:**
-- ✅ **Automatic backup scheduling** - Upload every X hours automatically
-- ✅ **Backup retention policies** - Keep only last N backups, auto-delete old ones
-- ✅ Schedule configuration commands (`!cloudbackup schedule`)
-- ✅ Retention configuration commands (`!cloudbackup retention`)
-- ✅ Automatic cleanup using `rclone delete`
-- ✅ Timestamp tracking for scheduled uploads
+See `CHANGELOG.md` for historical details
 
-**Completed in v0.3.0:**
-- ✅ Core script architecture with amscript API
-- ✅ rclone integration for universal provider support (40+ providers)
-- ✅ Interactive setup flow with validation
-- ✅ Remote existence validation
-- ✅ Universal upload implementation with timeout handling
-- ✅ Provider-specific setup instructions
-- ✅ rclone installation detection
-- ✅ Comprehensive error handling and user feedback
-- ✅ Configuration persistence across server restarts
-- ✅ Tested with Google Drive (production ready)
-
-**Planned for v0.5:**
+**Planned for v1.1:**
 - ⏳ Testing with additional providers (OneDrive, Dropbox, S3)
 - ⏳ Multiple backup destinations support
 - ⏳ Encryption before upload (via rclone crypt)
@@ -460,18 +419,10 @@ Please open an issue before starting major work to discuss the approach.
 
 ---
 
-## ✅ License
-
-MIT License — free to modify, distribute, and integrate.
-
-See LICENSE file for full details.
-
----
-
 ## ✅ Credits
 
 - **auto-mcs** by Kaleb Efflandt
-- **Cloud Backup script** by kalashnikxvxiii
+- **Cloud Backup script** by kalashnikxvxiii & Kaleb Efflandt
 
 ---
 

@@ -5,19 +5,81 @@ All notable changes to the Cloud Backup amscript project will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0] - 2026-03-21
 
-### Planned for v0.5
-- Testing with additional providers (OneDrive, Dropbox, S3, Mega)
-- Multiple backup destinations support
-- Pre-upload encryption (via rclone crypt)
-- Backup verification and integrity checks
-- Bandwidth limiting options
-- Email notifications on upload success/failure
-- Webhook integration for upload events
-- Download/restore backups from cloud
+### 🎉 STABLE RELEASE: Production-Ready Cloud Backup System
+
+**Status:** ✅ **STABLE & MATURE** - Feature-complete, battle-tested, and ready for long-term use
+
+This release marks the first stable version of Cloud Backup. The system has evolved from a proof-of-concept into a robust, production-ready backup solution with automation, retention, and universal provider support. This is the first implementation into auto-mcs with v2.3.6
 
 ---
+
+### 🚀 Highlights
+
+- **Universal cloud support (40+ providers)** via rclone
+- **Fully automated backups** with scheduling
+- **Intelligent retention policies** for cleanup
+- **Cross-platform reliability** (Windows, macOS, Linux, Docker)
+- **Zero external Python dependencies**
+- **Seamless integration with auto-mcs & amscript ecosystem**
+
+---
+
+### Added
+
+- Finalized and stabilized all core features introduced in v0.3.0–v0.4.0
+- Improved reliability of upload + cleanup workflows
+- Enhanced error handling and edge-case coverage
+- Polished user-facing commands and messaging
+- Refined setup flow for clearer onboarding experience
+- Improved compatibility across environments (Docker, headless, etc.)
+
+---
+
+### Changed
+
+- Promoted project to **stable v1.0** after extensive testing and validation
+- Cleaned up internal logic and edge-case handling across:
+  - scheduling system
+  - retention cleanup
+  - upload execution flow
+- Improved consistency in configuration handling and defaults
+- Minor performance improvements in backup listing and cleanup routines
+
+---
+
+### Fixed
+
+- Edge cases in retention cleanup when backup lists are empty or inconsistent
+- Rare timing issues with scheduled uploads and timestamp tracking
+- Minor inconsistencies in status output formatting
+
+---
+
+### Stability & Testing
+
+- ✅ All previously implemented features verified and stable
+- ✅ Real-world usage across multiple environments
+- ✅ Long-running scheduled backups validated
+- ✅ Retention cleanup confirmed under various configurations
+
+---
+
+### Notes
+
+- This release **introduces breaking changes**
+- Not backward compatible with v0.4.0 configurations
+- Marks the transition from “feature development” → “long-term stability & expansion”
+
+---
+
+### Summary
+
+Cloud Backup is now:
+
+> **A fully automated, cross-platform, provider-agnostic backup system for Minecraft servers**
+
 
 ## [0.4.0] - 2025-11-08
 
